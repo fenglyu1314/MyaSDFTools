@@ -247,7 +247,44 @@ class ImageUtils:
         """
         alpha = np.clip(alpha, 0.0, 1.0)
         return image1 * alpha + image2 * (1.0 - alpha)
-    
+
+    @staticmethod
+    def save_sdf_as_image(sdf_data: np.ndarray,
+                         file_path: str,
+                         colormap: str = 'viridis',
+                         quality: int = 95) -> bool:
+        """
+        将SDF数据保存为图像
+
+        Args:
+            sdf_data: SDF数据 (numpy数组)
+            file_path: 保存路径
+            colormap: 颜色映射 ('viridis', 'plasma', 'jet', 'gray')
+            quality: 图像质量
+
+        Returns:
+            是否保存成功
+        """
+        try:
+            # 确保数据在[0,1]范围内
+            normalized_data = np.clip(sdf_data, 0.0, 1.0)
+
+            if colormap.lower() == 'gray':
+                # 灰度图像
+                image_uint8 = (normalized_data * 255).astype(np.uint8)
+                pil_image = Image.fromarray(image_uint8, mode='L')
+            else:
+                # 彩色映射
+                colored_image = ImageUtils.apply_colormap(normalized_data, colormap)
+                pil_image = Image.fromarray(colored_image, mode='RGB')
+
+            # 保存图像
+            return ImageUtils.save_image(pil_image, file_path, quality)
+
+        except Exception as e:
+            print(f"保存SDF图像失败: {str(e)}")
+            return False
+
     @staticmethod
     def apply_colormap(image: np.ndarray, colormap: str = 'viridis') -> np.ndarray:
         """

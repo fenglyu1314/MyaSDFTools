@@ -76,16 +76,18 @@ class SDFGenerator:
                          image_paths: List[str],
                          angles: Optional[List[float]] = None,
                          threshold: float = 0.5,
-                         normalize: bool = True) -> Tuple[np.ndarray, float]:
+                         normalize: bool = True,
+                         blend_mode: str = "weighted") -> Tuple[np.ndarray, float]:
         """
         计算多张图像的混合SDF
-        
+
         Args:
             image_paths: 图像文件路径列表
             angles: 对应的光照角度列表 (度数)
             threshold: 二值化阈值
             normalize: 是否归一化
-            
+            blend_mode: 混合模式 ("weighted", "average", "max", "min")
+
         Returns:
             (mixed_sdf_result, computation_time)
         """
@@ -108,7 +110,7 @@ class SDFGenerator:
                 sdf_images.append(sdf_result)
             
             # 混合多个SDF
-            mixed_sdf = self._blend_multiple_sdfs(sdf_images, angles)
+            mixed_sdf = self._blend_multiple_sdfs(sdf_images, angles, blend_mode)
             
             computation_time = time.time() - start_time
             self.last_computation_time = computation_time
@@ -202,68 +204,247 @@ class SDFGenerator:
         angle_step = 360.0 / num_images
         return [i * angle_step for i in range(num_images)]
     
-    def _blend_multiple_sdfs(self, sdf_images: List[np.ndarray], angles: List[float]) -> np.ndarray:
-        """混合多个SDF图像"""
+    def _blend_multiple_sdfs(self, sdf_images: List[np.ndarray], angles: List[float], blend_mode: str = "weighted") -> np.ndarray:
+        """
+        混合多个SDF图像
+
+        支持多种混合策略：
+        - weighted: 基于角度权重的智能混合 (推荐)
+        - average: 简单平均混合
+        - max: 取最大值混合
+        - min: 取最小值混合
+        """
         if not sdf_images:
             raise ValueError("SDF图像列表不能为空")
-        
+
+        if len(sdf_images) != len(angles):
+            raise ValueError("SDF图像数量必须与角度数量相同")
+
         # 确保所有图像尺寸相同
         height, width = sdf_images[0].shape
         for sdf in sdf_images[1:]:
             if sdf.shape != (height, width):
                 raise ValueError("所有SDF图像必须具有相同的尺寸")
-        
-        # 简单的平均混合 (后续可以实现更复杂的混合算法)
+
+        # 如果只有一张图像，直接返回
+        if len(sdf_images) == 1:
+            return sdf_images[0].copy()
+
+        # 根据混合模式选择策略
+        if blend_mode == "weighted":
+            return self._blend_weighted(sdf_images, angles)
+        elif blend_mode == "average":
+            return self._blend_average(sdf_images)
+        elif blend_mode == "max":
+            return self._blend_max(sdf_images)
+        elif blend_mode == "min":
+            return self._blend_min(sdf_images)
+        else:
+            # 默认使用加权混合
+            return self._blend_weighted(sdf_images, angles)
+
+    def _blend_weighted(self, sdf_images: List[np.ndarray], angles: List[float]) -> np.ndarray:
+        """基于角度权重的混合"""
+        height, width = sdf_images[0].shape
+
+        # 计算角度权重
+        angle_weights = self._calculate_angle_weights(angles)
+
+        # 基于权重的混合
         result = np.zeros((height, width), dtype=np.float32)
-        
+
+        for sdf_image, weight in zip(sdf_images, angle_weights):
+            result += sdf_image * weight
+
+        return result
+
+    def _blend_average(self, sdf_images: List[np.ndarray]) -> np.ndarray:
+        """简单平均混合"""
+        height, width = sdf_images[0].shape
+        result = np.zeros((height, width), dtype=np.float32)
+
         for sdf_image in sdf_images:
             result += sdf_image
-        
+
         result /= len(sdf_images)
-        
         return result
-    
-    def preview_lighting(self, 
-                        sdf_data: np.ndarray, 
-                        light_angle: float) -> np.ndarray:
+
+    def _blend_max(self, sdf_images: List[np.ndarray]) -> np.ndarray:
+        """取最大值混合"""
+        result = sdf_images[0].copy()
+
+        for sdf_image in sdf_images[1:]:
+            result = np.maximum(result, sdf_image)
+
+        return result
+
+    def _blend_min(self, sdf_images: List[np.ndarray]) -> np.ndarray:
+        """取最小值混合"""
+        result = sdf_images[0].copy()
+
+        for sdf_image in sdf_images[1:]:
+            result = np.minimum(result, sdf_image)
+
+        return result
+
+    def _calculate_angle_weights(self, angles: List[float]) -> List[float]:
+        """
+        计算角度权重
+
+        基于角度分布的均匀性计算权重，确保角度分布越均匀，混合效果越好
+
+        Args:
+            angles: 角度列表 (度数)
+
+        Returns:
+            权重列表，总和为1.0
+        """
+        if not angles:
+            return []
+
+        if len(angles) == 1:
+            return [1.0]
+
+        # 将角度标准化到[0, 360)范围
+        normalized_angles = [(angle % 360.0) for angle in angles]
+
+        # 计算角度间隔
+        sorted_angles = sorted(normalized_angles)
+
+        # 计算每个角度的权重
+        weights = []
+        n = len(angles)
+
+        for i, angle in enumerate(normalized_angles):
+            # 找到当前角度在排序列表中的位置
+            sorted_index = sorted_angles.index(angle)
+
+            # 计算前后角度间隔
+            prev_angle = sorted_angles[(sorted_index - 1) % n]
+            next_angle = sorted_angles[(sorted_index + 1) % n]
+
+            # 计算角度间隔 (考虑360度循环)
+            prev_gap = self._angle_difference(angle, prev_angle)
+            next_gap = self._angle_difference(next_angle, angle)
+
+            # 基于间隔计算权重 (间隔越大，权重越高)
+            gap_factor = (prev_gap + next_gap) / 2.0
+
+            # 基础权重 + 间隔调整
+            base_weight = 1.0 / n
+            gap_adjustment = gap_factor / 180.0  # 标准化到[0,2]
+
+            weight = base_weight * (0.5 + gap_adjustment)
+            weights.append(weight)
+
+        # 归一化权重
+        total_weight = sum(weights)
+        if total_weight > 0:
+            weights = [w / total_weight for w in weights]
+        else:
+            weights = [1.0 / n] * n
+
+        return weights
+
+    def _angle_difference(self, angle1: float, angle2: float) -> float:
+        """
+        计算两个角度之间的最小差值 (考虑360度循环)
+
+        Args:
+            angle1: 角度1 (度数)
+            angle2: 角度2 (度数)
+
+        Returns:
+            最小角度差值 (0-180度)
+        """
+        diff = abs(angle1 - angle2)
+        return min(diff, 360.0 - diff)
+
+    def preview_lighting(self,
+                        sdf_data: np.ndarray,
+                        light_angle: float,
+                        lighting_intensity: float = 1.0,
+                        ambient_light: float = 0.3) -> np.ndarray:
         """
         根据光照角度预览SDF效果
-        
+
+        参考shader算法实现正确的SDF光照效果
+
         Args:
             sdf_data: SDF数据
             light_angle: 光照角度 (0-360度)
-            
+            lighting_intensity: 光照强度 (0.0-2.0)
+            ambient_light: 环境光强度 (0.0-1.0)
+
         Returns:
             预览效果图像
         """
-        # 简单的光照效果模拟
-        # 将SDF值作为光照强度
-        angle_rad = math.radians(light_angle)
-        
-        # 创建光照方向向量
-        light_dir_x = math.cos(angle_rad)
-        light_dir_y = math.sin(angle_rad)
-        
-        # 计算梯度 (法向量)
-        grad_y, grad_x = np.gradient(sdf_data)
-        
-        # 归一化梯度
-        grad_magnitude = np.sqrt(grad_x**2 + grad_y**2)
-        grad_magnitude = np.maximum(grad_magnitude, 1e-8)  # 避免除零
-        
-        norm_grad_x = grad_x / grad_magnitude
-        norm_grad_y = grad_y / grad_magnitude
-        
-        # 计算光照强度 (点积)
-        lighting = norm_grad_x * light_dir_x + norm_grad_y * light_dir_y
-        
-        # 将光照强度映射到[0,1]
-        lighting = (lighting + 1.0) * 0.5
-        
-        # 结合SDF值和光照效果
-        result = sdf_data * lighting
-        
+        # 将角度转换为0-1范围的光照参数
+        # 0度 = 0.0, 180度 = 0.5, 360度 = 1.0
+        light_param = (light_angle % 360.0) / 360.0
+
+        # 定义方向向量 (参考shader中的front_dir和right_dir)
+        front_dir = np.array([0.0, 0.0, 1.0])  # 正面方向
+        right_dir = np.array([1.0, 0.0, 0.0])  # 右方向
+
+        # 根据light_param计算光照方向
+        # 将0-1映射到完整的光照方向
+        angle_rad = light_param * 2 * math.pi
+        light_dir = np.array([
+            math.cos(angle_rad),
+            math.sin(angle_rad),
+            0.5  # Z分量，控制光照的"深度"
+        ])
+
+        # 归一化光照方向
+        light_dir = light_dir / np.linalg.norm(light_dir)
+
+        # 计算点积 (参考shader算法)
+        RdotL = np.dot(right_dir, light_dir)
+        FdotL = np.dot(front_dir, light_dir)
+
+        # 应用shader中的FdotL变换
+        FdotL = ((-FdotL + 1.0) * 0.5) * ((-FdotL + 1.0) * 0.5)
+
+        # 根据RdotL决定采样方向
+        if RdotL < 0:
+            # 正常采样
+            sdf_sample = sdf_data
+        else:
+            # 镜像采样 (翻转X轴)
+            sdf_sample = np.fliplr(sdf_data)
+
+        # 应用step函数 (参考shader: FdotL < sdf_col)
+        # 这里我们使用smooth step来获得更好的视觉效果
+        shadow_mask = self._smooth_step(FdotL, sdf_sample, 0.1)
+
+        # 计算最终光照效果
+        # 基础亮度
+        base_lighting = ambient_light + (1.0 - ambient_light) * lighting_intensity
+
+        # 应用阴影
+        final_lighting = base_lighting * shadow_mask
+
+        # 结合原始SDF数据
+        result = sdf_data * final_lighting
+
         return np.clip(result, 0.0, 1.0)
+
+    def _smooth_step(self, edge: float, value: np.ndarray, smoothness: float = 0.1) -> np.ndarray:
+        """
+        平滑step函数，避免硬边缘
+
+        Args:
+            edge: 阈值
+            value: 输入值
+            smoothness: 平滑度
+
+        Returns:
+            平滑的step结果
+        """
+        # 计算平滑的step函数
+        t = np.clip((value - edge + smoothness) / (2 * smoothness), 0.0, 1.0)
+        return t * t * (3.0 - 2.0 * t)  # 平滑插值
     
     def get_last_computation_time(self) -> float:
         """获取最后一次计算时间"""

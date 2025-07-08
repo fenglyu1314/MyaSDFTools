@@ -13,8 +13,9 @@
 
 import sys
 import os
+import time
 from pathlib import Path
-from typing import Optional, List
+from typing import Optional, List, Dict
 
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
@@ -30,11 +31,121 @@ from PySide6.QtGui import QPixmap, QAction, QIcon, QFont, QDragEnterEvent, QDrop
 from .image_list_widget import ImageListWidget
 from .preview_widget import PreviewWidget
 from .parameter_widget import ParameterWidget
+from .image_card_widget import ImageCardsContainer
+from .sdf_card_widget import SDFCardsContainer
+from .zoomable_image_widget import ZoomableImageWidget
 
 # 导入核心模块
 from ..core.sdf_generator import SDFGenerator
 from ..core.image_manager import ImageManager
 from ..utils.image_utils import ImageUtils
+
+class ButtonStyles:
+    """统一的按钮样式"""
+
+    @staticmethod
+    def primary_button(size="normal"):
+        """主要按钮样式"""
+        height = "36px" if size == "normal" else "32px" if size == "small" else "28px"
+        font_size = "14px" if size == "normal" else "13px" if size == "small" else "12px"
+        return f"""
+            QPushButton {{
+                background-color: #2196F3;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                font-size: {font_size};
+                font-weight: bold;
+                min-height: {height};
+                padding: 0px 12px;
+            }}
+            QPushButton:hover:enabled {{
+                background-color: #1976D2;
+            }}
+            QPushButton:pressed:enabled {{
+                background-color: #1565C0;
+            }}
+            QPushButton:disabled {{
+                background-color: #CCCCCC;
+                color: #666666;
+            }}
+        """
+
+    @staticmethod
+    def success_button(size="normal"):
+        """成功按钮样式"""
+        height = "36px" if size == "normal" else "32px" if size == "small" else "28px"
+        font_size = "14px" if size == "normal" else "13px" if size == "small" else "12px"
+        return f"""
+            QPushButton {{
+                background-color: #4CAF50;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                font-size: {font_size};
+                font-weight: bold;
+                min-height: {height};
+                padding: 0px 12px;
+            }}
+            QPushButton:hover {{
+                background-color: #45a049;
+            }}
+            QPushButton:pressed {{
+                background-color: #3d8b40;
+            }}
+        """
+
+    @staticmethod
+    def warning_button(size="normal"):
+        """警告按钮样式"""
+        height = "36px" if size == "normal" else "32px" if size == "small" else "28px"
+        font_size = "14px" if size == "normal" else "13px" if size == "small" else "12px"
+        return f"""
+            QPushButton {{
+                background-color: #FF9800;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                font-size: {font_size};
+                font-weight: bold;
+                min-height: {height};
+                padding: 0px 12px;
+            }}
+            QPushButton:hover:enabled {{
+                background-color: #F57C00;
+            }}
+            QPushButton:pressed:enabled {{
+                background-color: #E65100;
+            }}
+            QPushButton:disabled {{
+                background-color: #CCCCCC;
+                color: #666666;
+            }}
+        """
+
+    @staticmethod
+    def secondary_button(size="normal"):
+        """次要按钮样式"""
+        height = "36px" if size == "normal" else "32px" if size == "small" else "24px"
+        font_size = "14px" if size == "normal" else "13px" if size == "small" else "11px"
+        return f"""
+            QPushButton {{
+                background-color: #607D8B;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                font-size: {font_size};
+                font-weight: bold;
+                min-height: {height};
+                padding: 0px 12px;
+            }}
+            QPushButton:hover {{
+                background-color: #546E7A;
+            }}
+            QPushButton:pressed {{
+                background-color: #455A64;
+            }}
+        """
 
 class MainWindow(QMainWindow):
     """SDF工具主窗口"""
@@ -42,12 +153,20 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("SDF工具 - 二次元脸部SDF生成")
-        self.setMinimumSize(1200, 800)
+        self.setFixedSize(1400, 900)  # 固定窗口大小
         
         # 初始化变量
         self.current_images: List[str] = []
         self.sdf_result: Optional[object] = None
         self.computation_time: float = 0.0
+
+        # 批量处理相关
+        self.batch_sdf_results: Dict[str, object] = {}  # 存储每张图像的SDF结果
+        self.batch_processing: bool = False
+
+        # 新UI相关变量
+        self.current_sdf_results: Dict[str, object] = {}  # 存储每张图像的SDF结果
+        self.current_merged_sdf: Optional[object] = None  # 存储合并后的SDF
 
         # 初始化核心组件
         self.sdf_generator = SDFGenerator()
@@ -75,166 +194,285 @@ class MainWindow(QMainWindow):
             self.setWindowIcon(QIcon(str(icon_path)))
     
     def _init_ui(self):
-        """初始化用户界面"""
+        """初始化用户界面 - 新四区域布局"""
         # 创建中央部件
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
-        
-        # 创建主布局
-        main_layout = QHBoxLayout(central_widget)
+
+        # 创建主布局 - 垂直布局
+        main_layout = QVBoxLayout(central_widget)
         main_layout.setContentsMargins(10, 10, 10, 10)
         main_layout.setSpacing(10)
-        
-        # 创建分割器
-        splitter = QSplitter(Qt.Horizontal)
-        main_layout.addWidget(splitter)
-        
-        # 左侧面板 - 图像管理和参数控制
-        left_panel = self._create_left_panel()
-        splitter.addWidget(left_panel)
-        
-        # 右侧面板 - 预览区域
-        right_panel = self._create_right_panel()
-        splitter.addWidget(right_panel)
-        
-        # 设置分割器比例
-        splitter.setSizes([400, 800])
-        splitter.setStretchFactor(0, 0)
-        splitter.setStretchFactor(1, 1)
-    
-    def _create_left_panel(self) -> QWidget:
-        """创建左侧控制面板"""
-        panel = QWidget()
-        layout = QVBoxLayout(panel)
-        layout.setContentsMargins(5, 5, 5, 5)
+
+        # 区域1: 图像导入与角度配置区域 (高度200px)
+        image_import_area = self._create_image_import_area()
+        image_import_area.setFixedHeight(200)
+        main_layout.addWidget(image_import_area)
+
+        # 区域2: 单张SDF生成结果区域 (高度150px)
+        sdf_results_area = self._create_sdf_results_area()
+        sdf_results_area.setFixedHeight(150)
+        main_layout.addWidget(sdf_results_area)
+
+        # 区域3+4: 预览区域 - 水平分割 (剩余高度400px)
+        preview_layout = QHBoxLayout()
+        preview_layout.setSpacing(10)
+
+        # 区域3: 合并SDF预览区域 (宽度680px)
+        merged_sdf_area = self._create_merged_sdf_area()
+        merged_sdf_area.setFixedWidth(680)
+        preview_layout.addWidget(merged_sdf_area)
+
+        # 区域4: 光照效果预览区域 (宽度680px)
+        lighting_preview_area = self._create_lighting_preview_area()
+        lighting_preview_area.setFixedWidth(680)
+        preview_layout.addWidget(lighting_preview_area)
+
+        main_layout.addLayout(preview_layout)
+
+    def _create_image_import_area(self) -> QWidget:
+        """创建图像导入与角度配置区域"""
+        area = QGroupBox("1. 图像导入与角度配置")
+        layout = QVBoxLayout(area)
+        layout.setContentsMargins(10, 15, 10, 10)
         layout.setSpacing(10)
-        
-        # 图像导入区域
-        import_group = QGroupBox("图像导入")
-        import_layout = QVBoxLayout(import_group)
-        
-        # 导入按钮
+
+        # 上半部分：图像卡片和操作按钮
+        top_layout = QHBoxLayout()
+
+        # 图像卡片容器
+        self.image_cards_container = ImageCardsContainer()
+        top_layout.addWidget(self.image_cards_container)
+
+        # 操作按钮区域
+        button_layout = QVBoxLayout()
+        button_layout.setSpacing(5)
+
         self.import_btn = QPushButton("导入图像")
-        self.import_btn.setMinimumHeight(40)
-        self.import_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #4CAF50;
-                color: white;
-                border: none;
-                border-radius: 5px;
-                font-size: 14px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #45a049;
-            }
-            QPushButton:pressed {
-                background-color: #3d8b40;
-            }
-        """)
-        import_layout.addWidget(self.import_btn)
-        
-        # 图像列表
-        self.image_list = ImageListWidget()
-        import_layout.addWidget(self.image_list)
-        
-        layout.addWidget(import_group)
-        
-        # 参数控制区域
-        self.parameter_widget = ParameterWidget()
-        layout.addWidget(self.parameter_widget)
-        
-        # 生成按钮
+        self.import_btn.setStyleSheet(ButtonStyles.success_button("normal"))
+        button_layout.addWidget(self.import_btn)
+
         self.generate_btn = QPushButton("生成SDF")
-        self.generate_btn.setMinimumHeight(50)
         self.generate_btn.setEnabled(False)
-        self.generate_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #2196F3;
-                color: white;
-                border: none;
-                border-radius: 5px;
-                font-size: 16px;
-                font-weight: bold;
-            }
-            QPushButton:hover:enabled {
-                background-color: #1976D2;
-            }
-            QPushButton:pressed:enabled {
-                background-color: #1565C0;
-            }
-            QPushButton:disabled {
-                background-color: #CCCCCC;
-                color: #666666;
-            }
-        """)
-        layout.addWidget(self.generate_btn)
-        
-        # 进度条
+        self.generate_btn.setStyleSheet(ButtonStyles.primary_button("normal"))
+        button_layout.addWidget(self.generate_btn)
+
+        button_layout.addStretch()
+        top_layout.addLayout(button_layout)
+
+        layout.addLayout(top_layout)
+
+        # 下半部分：进度条
         self.progress_bar = QProgressBar()
         self.progress_bar.setVisible(False)
+        self.progress_bar.setFixedHeight(20)
         layout.addWidget(self.progress_bar)
-        
-        return panel
-    
-    def _create_right_panel(self) -> QWidget:
-        """创建右侧预览面板"""
-        panel = QWidget()
-        layout = QVBoxLayout(panel)
-        layout.setContentsMargins(5, 5, 5, 5)
+
+        return area
+
+    def _create_sdf_results_area(self) -> QWidget:
+        """创建单张SDF生成结果区域"""
+        area = QGroupBox("2. 单张SDF生成结果")
+        layout = QVBoxLayout(area)
+        layout.setContentsMargins(10, 15, 10, 10)
+
+        # SDF结果卡片容器
+        self.sdf_cards_container = SDFCardsContainer()
+        layout.addWidget(self.sdf_cards_container)
+
+        return area
+
+    def _create_merged_sdf_area(self) -> QWidget:
+        """创建合并SDF预览区域"""
+        area = QGroupBox("3. 合并SDF预览")
+        layout = QVBoxLayout(area)
+        layout.setContentsMargins(10, 15, 10, 10)
         layout.setSpacing(10)
-        
-        # 预览区域标题
-        title_layout = QHBoxLayout()
-        
-        preview_title = QLabel("SDF预览")
-        preview_title.setFont(QFont("Arial", 14, QFont.Bold))
-        title_layout.addWidget(preview_title)
-        
-        title_layout.addStretch()
-        
-        # 导出按钮
-        self.export_btn = QPushButton("导出SDF")
-        self.export_btn.setEnabled(False)
-        self.export_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #FF9800;
-                color: white;
-                border: none;
-                border-radius: 3px;
-                padding: 5px 15px;
-                font-weight: bold;
-            }
-            QPushButton:hover:enabled {
-                background-color: #F57C00;
-            }
-            QPushButton:disabled {
-                background-color: #CCCCCC;
-                color: #666666;
+
+        # 预览图像区域 (660px × 350px) - 使用可缩放组件
+        self.merged_sdf_preview = ZoomableImageWidget()
+        self.merged_sdf_preview.setFixedSize(660, 350)
+        self.merged_sdf_preview.zoom_changed.connect(self._on_merged_sdf_zoom_changed)
+        layout.addWidget(self.merged_sdf_preview)
+
+        # 控制区域
+        control_layout = QHBoxLayout()
+
+        # 缩放控制
+        control_layout.addWidget(QLabel("缩放:"))
+
+        self.fit_btn = QPushButton("适应")
+        self.fit_btn.setStyleSheet(ButtonStyles.secondary_button("tiny"))
+        control_layout.addWidget(self.fit_btn)
+
+        self.actual_btn = QPushButton("1:1")
+        self.actual_btn.setStyleSheet(ButtonStyles.secondary_button("tiny"))
+        control_layout.addWidget(self.actual_btn)
+
+        self.reset_btn = QPushButton("重置")
+        self.reset_btn.setStyleSheet(ButtonStyles.secondary_button("tiny"))
+        control_layout.addWidget(self.reset_btn)
+
+        self.zoom_label = QLabel("100%")
+        control_layout.addWidget(self.zoom_label)
+
+        control_layout.addSpacing(20)
+
+        # 混合模式
+        control_layout.addWidget(QLabel("混合模式:"))
+        self.blend_mode_combo = QComboBox()
+        self.blend_mode_combo.addItems(["智能权重", "简单平均", "最大值", "最小值"])
+        control_layout.addWidget(self.blend_mode_combo)
+
+        control_layout.addStretch()
+        layout.addLayout(control_layout)
+
+        return area
+
+    def _create_lighting_preview_area(self) -> QWidget:
+        """创建光照效果预览区域"""
+        area = QGroupBox("4. 光照效果预览")
+        layout = QVBoxLayout(area)
+        layout.setContentsMargins(10, 15, 10, 10)
+        layout.setSpacing(10)
+
+        # 预览图像区域 (660px × 300px) - 固定显示
+        self.lighting_preview = QLabel("光照效果预览\n\n生成SDF后将在此显示")
+        self.lighting_preview.setFixedSize(660, 300)
+        self.lighting_preview.setAlignment(Qt.AlignCenter)
+        self.lighting_preview.setStyleSheet("""
+            QLabel {
+                border: 1px solid #CCCCCC;
+                background-color: #F5F5F5;
+                color: #999999;
+                font-size: 14px;
             }
         """)
-        title_layout.addWidget(self.export_btn)
-        
+        layout.addWidget(self.lighting_preview)
+
+        # 光照控制区域
+        control_layout = QVBoxLayout()
+        control_layout.setSpacing(8)
+
+        # 光照角度
+        angle_layout = QHBoxLayout()
+        angle_layout.addWidget(QLabel("光照角度:"))
+        self.angle_slider = QSlider(Qt.Horizontal)
+        self.angle_slider.setRange(0, 360)
+        self.angle_slider.setValue(45)
+        angle_layout.addWidget(self.angle_slider)
+        self.angle_value_label = QLabel("45°")
+        self.angle_value_label.setMinimumWidth(40)
+        angle_layout.addWidget(self.angle_value_label)
+        control_layout.addLayout(angle_layout)
+
+        # 光照强度
+        intensity_layout = QHBoxLayout()
+        intensity_layout.addWidget(QLabel("光照强度:"))
+        self.intensity_slider = QSlider(Qt.Horizontal)
+        self.intensity_slider.setRange(0, 200)
+        self.intensity_slider.setValue(100)
+        intensity_layout.addWidget(self.intensity_slider)
+        self.intensity_value_label = QLabel("1.0")
+        self.intensity_value_label.setMinimumWidth(40)
+        intensity_layout.addWidget(self.intensity_value_label)
+        control_layout.addLayout(intensity_layout)
+
+        # 环境光
+        ambient_layout = QHBoxLayout()
+        ambient_layout.addWidget(QLabel("环境光:"))
+        self.ambient_slider = QSlider(Qt.Horizontal)
+        self.ambient_slider.setRange(0, 100)
+        self.ambient_slider.setValue(30)
+        ambient_layout.addWidget(self.ambient_slider)
+        self.ambient_value_label = QLabel("0.3")
+        self.ambient_value_label.setMinimumWidth(40)
+        ambient_layout.addWidget(self.ambient_value_label)
+        control_layout.addLayout(ambient_layout)
+
+        layout.addLayout(control_layout)
+
+        return area
+
+
+    
+    def _create_preview_panel(self) -> QWidget:
+        """创建中间预览面板"""
+        panel = QWidget()
+        layout = QVBoxLayout(panel)
+        layout.setContentsMargins(3, 3, 3, 3)  # 减少边距
+        layout.setSpacing(5)  # 减少间距
+
+        # 预览区域标题 - 更紧凑
+        title_layout = QHBoxLayout()
+        title_layout.setContentsMargins(5, 0, 5, 0)
+
+        preview_title = QLabel("SDF预览")
+        preview_title.setFont(QFont("Arial", 13, QFont.Bold))  # 减小字体
+        title_layout.addWidget(preview_title)
+
+        title_layout.addStretch()
+
+        # 快速操作按钮组 - 更紧凑
+        quick_btn_layout = QHBoxLayout()
+        quick_btn_layout.setSpacing(3)
+
+        # 适应窗口按钮 - 使用统一样式
+        self.fit_btn = QPushButton("适应")
+        self.fit_btn.setMaximumWidth(50)
+        self.fit_btn.setStyleSheet(ButtonStyles.secondary_button("tiny"))
+        quick_btn_layout.addWidget(self.fit_btn)
+
+        # 实际大小按钮 - 使用统一样式
+        self.actual_btn = QPushButton("1:1")
+        self.actual_btn.setMaximumWidth(40)
+        self.actual_btn.setStyleSheet(ButtonStyles.secondary_button("tiny"))
+        quick_btn_layout.addWidget(self.actual_btn)
+
+        # 重置按钮 - 使用统一样式
+        self.reset_btn = QPushButton("重置")
+        self.reset_btn.setMaximumWidth(50)
+        self.reset_btn.setStyleSheet(ButtonStyles.secondary_button("tiny"))
+        quick_btn_layout.addWidget(self.reset_btn)
+
+        title_layout.addLayout(quick_btn_layout)
         layout.addLayout(title_layout)
-        
+
         # 预览组件
         self.preview_widget = PreviewWidget()
         layout.addWidget(self.preview_widget)
 
-        # 预览操作提示
-        hint_label = QLabel("💡 提示: 鼠标滚轮缩放，左键拖拽移动，右侧按钮快速调整视图")
+        # 简化的操作提示
+        hint_label = QLabel("💡 滚轮缩放 | 左键拖拽 | 右侧调节参数")
         hint_label.setStyleSheet("""
             QLabel {
                 color: #666666;
-                font-size: 11px;
-                padding: 5px;
-                background-color: #F0F8FF;
-                border: 1px solid #E0E0E0;
+                font-size: 10px;
+                padding: 3px 8px;
+                background-color: #F8F9FA;
+                border: 1px solid #E9ECEF;
                 border-radius: 3px;
             }
         """)
-        hint_label.setWordWrap(True)
+        hint_label.setMaximumHeight(20)
         layout.addWidget(hint_label)
+
+        return panel
+
+    def _create_parameter_panel(self) -> QWidget:
+        """创建右侧参数控制面板"""
+        panel = QWidget()
+        panel.setMaximumWidth(280)  # 限制最大宽度
+        layout = QVBoxLayout(panel)
+        layout.setContentsMargins(3, 3, 3, 3)
+        layout.setSpacing(5)
+
+        # 参数控制区域
+        self.parameter_widget = ParameterWidget()
+        layout.addWidget(self.parameter_widget)
+
+        # 添加弹性空间
+        layout.addStretch()
 
         return panel
 
@@ -282,6 +520,32 @@ class MainWindow(QMainWindow):
         clear_action.triggered.connect(self._clear_images)
         edit_menu.addAction(clear_action)
 
+        edit_menu.addSeparator()
+
+        # 批量处理菜单
+        batch_menu = edit_menu.addMenu("批量处理(&B)")
+
+        # 批量导入
+        batch_import_action = QAction("批量导入文件夹(&I)", self)
+        batch_import_action.setShortcut("Ctrl+Shift+I")
+        batch_import_action.setStatusTip("批量导入文件夹中的所有图像")
+        batch_import_action.triggered.connect(self._batch_import_folder)
+        batch_menu.addAction(batch_import_action)
+
+        # 批量生成SDF
+        batch_generate_action = QAction("批量生成SDF(&G)", self)
+        batch_generate_action.setShortcut("Ctrl+Shift+G")
+        batch_generate_action.setStatusTip("为每张图像单独生成SDF")
+        batch_generate_action.triggered.connect(self._batch_generate_sdf)
+        batch_menu.addAction(batch_generate_action)
+
+        # 批量导出
+        batch_export_action = QAction("批量导出(&E)", self)
+        batch_export_action.setShortcut("Ctrl+Shift+E")
+        batch_export_action.setStatusTip("批量导出所有SDF结果")
+        batch_export_action.triggered.connect(self._batch_export_sdf)
+        batch_menu.addAction(batch_export_action)
+
         # 视图菜单
         view_menu = menubar.addMenu("视图(&V)")
 
@@ -318,6 +582,12 @@ class MainWindow(QMainWindow):
         self.image_count_label = QLabel("图像: 0")
         self.status_bar.addPermanentWidget(self.image_count_label)
 
+        # 导出按钮
+        self.export_btn = QPushButton("导出结果")
+        self.export_btn.setEnabled(False)
+        self.export_btn.setStyleSheet(ButtonStyles.warning_button("small"))
+        self.status_bar.addPermanentWidget(self.export_btn)
+
     def _connect_signals(self):
         """连接信号和槽"""
         # 按钮信号
@@ -325,15 +595,155 @@ class MainWindow(QMainWindow):
         self.generate_btn.clicked.connect(self._generate_sdf)
         self.export_btn.clicked.connect(self._export_sdf)
 
-        # 图像列表信号
-        self.image_list.images_changed.connect(self._on_images_changed)
+        # 预览快速操作按钮
+        self.fit_btn.clicked.connect(self._fit_to_window)
+        self.actual_btn.clicked.connect(self._actual_size)
+        self.reset_btn.clicked.connect(self._reset_view)
 
-        # 参数变化信号
-        self.parameter_widget.parameters_changed.connect(self._on_parameters_changed)
+        # 合并SDF预览缩放信号
+        self.merged_sdf_preview.zoom_changed.connect(self._on_merged_sdf_zoom_changed)
+
+        # 光照控制滑竿
+        self.angle_slider.valueChanged.connect(self._on_angle_changed)
+        self.intensity_slider.valueChanged.connect(self._on_intensity_changed)
+        self.ambient_slider.valueChanged.connect(self._on_ambient_changed)
+
+        # 混合模式
+        self.blend_mode_combo.currentTextChanged.connect(self._on_blend_mode_changed)
+
+        # 图像卡片容器信号
+        self.image_cards_container.images_changed.connect(self._on_images_changed)
+        self.image_cards_container.angle_changed.connect(self._on_angle_changed_card)
 
     def _show_welcome_message(self):
         """显示欢迎信息"""
         self.status_label.setText("欢迎使用SDF工具！请导入图像开始使用。")
+
+    def _on_angle_changed(self, value):
+        """光照角度改变"""
+        self.angle_value_label.setText(f"{value}°")
+        self._update_lighting_preview()
+
+    def _on_intensity_changed(self, value):
+        """光照强度改变"""
+        intensity = value / 100.0
+        self.intensity_value_label.setText(f"{intensity:.1f}")
+        self._update_lighting_preview()
+
+    def _on_ambient_changed(self, value):
+        """环境光改变"""
+        ambient = value / 100.0
+        self.ambient_value_label.setText(f"{ambient:.1f}")
+        self._update_lighting_preview()
+
+    def _update_lighting_preview(self):
+        """更新光照效果预览"""
+        # 检查是否有合并的SDF数据
+        if not hasattr(self, 'current_merged_sdf') or self.current_merged_sdf is None:
+            return
+
+        try:
+            # 获取光照参数
+            angle = self.angle_slider.value()
+            intensity = self.intensity_slider.value() / 100.0
+            ambient = self.ambient_slider.value() / 100.0
+
+            # 生成光照效果
+            lighting_result = self._apply_lighting_effect(
+                self.current_merged_sdf,
+                angle,
+                intensity,
+                ambient
+            )
+
+            if lighting_result is not None:
+                # 转换为QPixmap并显示
+                lighting_pixmap = self._numpy_to_pixmap(lighting_result)
+                if not lighting_pixmap.isNull():
+                    # 缩放到预览区域大小
+                    scaled_pixmap = lighting_pixmap.scaled(
+                        660, 300,
+                        Qt.KeepAspectRatio,
+                        Qt.SmoothTransformation
+                    )
+                    self.lighting_preview.setPixmap(scaled_pixmap)
+                    self.lighting_preview.setText("")  # 清除文本
+                else:
+                    self.lighting_preview.setText("光照效果\n生成失败")
+
+        except Exception as e:
+            print(f"更新光照预览失败: {e}")
+            self.lighting_preview.setText("光照效果\n预览错误")
+
+    def _apply_lighting_effect(self, sdf_data, angle_deg, intensity, ambient):
+        """应用光照效果到SDF数据"""
+        try:
+            import numpy as np
+            import math
+
+            # 将角度转换为弧度
+            angle_rad = math.radians(angle_deg)
+
+            # 计算光照方向向量
+            light_dir_x = math.cos(angle_rad)
+            light_dir_y = math.sin(angle_rad)
+
+            # 确保SDF数据是numpy数组
+            if not isinstance(sdf_data, np.ndarray):
+                return None
+
+            # 归一化SDF数据到0-1范围
+            sdf_normalized = sdf_data.astype(np.float32)
+            if sdf_normalized.max() > 1.0:
+                sdf_normalized = sdf_normalized / 255.0
+
+            # 计算梯度 (简化的法线计算)
+            grad_x = np.gradient(sdf_normalized, axis=1)
+            grad_y = np.gradient(sdf_normalized, axis=0)
+
+            # 计算光照强度
+            # 使用梯度作为法线，计算与光照方向的点积
+            lighting = (grad_x * light_dir_x + grad_y * light_dir_y) * intensity
+
+            # 添加环境光
+            lighting = np.clip(lighting + ambient, 0, 1)
+
+            # 应用到原始SDF
+            result = sdf_normalized * lighting
+
+            # 转换回0-255范围
+            result = (result * 255).astype(np.uint8)
+
+            return result
+
+        except Exception as e:
+            print(f"应用光照效果失败: {e}")
+            return None
+
+    def _on_blend_mode_changed(self, mode):
+        """混合模式改变"""
+        # TODO: 重新计算合并SDF
+        pass
+
+    def _on_angle_changed_card(self, image_path, angle):
+        """图像卡片角度改变"""
+        print(f"图像 {Path(image_path).name} 角度改变为 {angle}°")
+        # TODO: 如果已生成SDF，重新计算合并结果
+
+    def _on_images_changed(self):
+        """图像列表变化时的处理"""
+        count = self.image_cards_container.get_image_count()
+        self.image_count_label.setText(f"图像: {count}")
+        self.generate_btn.setEnabled(count > 0)
+
+        # 同步更新SDF卡片
+        images_data = self.image_cards_container.get_images_data()
+        self.sdf_cards_container.update_cards_from_images(images_data)
+
+        if count == 0:
+            self.status_label.setText("请导入图像开始使用")
+        else:
+            self.status_label.setText(f"已导入 {count} 张图像")
 
     # 拖拽事件处理
     def dragEnterEvent(self, event: QDragEnterEvent):
@@ -382,17 +792,33 @@ class MainWindow(QMainWindow):
         """添加图像到列表"""
         try:
             added_count = 0
-            for file_path in file_paths:
-                if file_path not in self.current_images:
-                    # 添加到图像管理器
-                    if self.image_manager.add_image(file_path):
-                        self.current_images.append(file_path)
-                        self.image_list.add_image(file_path)
-                        added_count += 1
-                    else:
-                        print(f"无法添加图像: {file_path}")
+            max_images = 10
 
-            self._update_ui_state()
+            # 检查是否超过最大数量
+            current_count = self.image_cards_container.get_image_count()
+            available_slots = max_images - current_count
+
+            if available_slots <= 0:
+                QMessageBox.warning(self, "导入限制", f"最多只能导入 {max_images} 张图像")
+                return
+
+            # 限制导入数量
+            if len(file_paths) > available_slots:
+                file_paths = file_paths[:available_slots]
+                QMessageBox.information(self, "导入提示",
+                                      f"由于数量限制，只导入前 {available_slots} 张图像")
+
+            for file_path in file_paths:
+                # 检查是否已存在
+                existing_images = [data[0] for data in self.image_cards_container.get_images_data()]
+                if file_path not in existing_images:
+                    # 添加到图像卡片容器
+                    if self.image_cards_container.add_image(file_path):
+                        added_count += 1
+                        print(f"✅ 添加图像: {Path(file_path).name}")
+                    else:
+                        print(f"❌ 无法添加图像: {file_path}")
+
             if added_count > 0:
                 self.status_label.setText(f"已导入 {added_count} 张图像")
             else:
@@ -402,29 +828,189 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "导入错误", f"导入图像时发生错误：\n{str(e)}")
 
     def _generate_sdf(self):
-        """生成SDF"""
-        if not self.current_images:
+        """生成SDF - 新版本"""
+        # 获取图像数据
+        images_data = self.image_cards_container.get_images_data()
+        if not images_data:
             QMessageBox.information(self, "提示", "请先导入图像")
             return
 
         # 显示进度条
         self.progress_bar.setVisible(True)
-        self.progress_bar.setRange(0, 0)  # 不确定进度
+        self.progress_bar.setRange(0, len(images_data))
+        self.progress_bar.setValue(0)
         self.generate_btn.setEnabled(False)
         self.status_label.setText("正在生成SDF...")
 
-        # 获取参数
-        params = self.parameter_widget.get_sdf_params()
+        # 设置所有SDF卡片为生成中状态
+        self.sdf_cards_container.set_all_status("generating")
 
+        # 开始生成每张图像的SDF
+        self._generate_individual_sdfs(images_data)
+
+    def _generate_individual_sdfs(self, images_data: list):
+        """生成每张图像的SDF"""
+        self.current_sdf_results = {}  # 存储每张图像的SDF结果
+
+        for i, (image_path, angle) in enumerate(images_data):
+            try:
+                # 更新进度
+                self.progress_bar.setValue(i)
+                filename = Path(image_path).name
+                self.status_label.setText(f"正在生成SDF: {filename} ({i+1}/{len(images_data)})")
+
+                # 获取对应的SDF卡片
+                sdf_card = self.sdf_cards_container.get_sdf_card(image_path)
+                if sdf_card:
+                    sdf_card.set_status("generating")
+
+                # 生成SDF
+                start_time = time.time()
+
+                # 获取基础参数 (暂时使用默认值)
+                sdf_result, computation_time = self.sdf_generator.compute_single_sdf(
+                    image_path,
+                    threshold=0.5,
+                    normalize=True,
+                    invert=False
+                )
+
+                # 更新SDF卡片
+                if sdf_card:
+                    sdf_card.set_generation_time(computation_time)
+                    sdf_card.set_status("completed")
+
+                    # 设置SDF预览图
+                    if sdf_result is not None:
+                        # 将numpy数组转换为QPixmap
+                        sdf_pixmap = self._numpy_to_pixmap(sdf_result)
+                        sdf_card.set_sdf_preview(sdf_pixmap)
+
+                # 存储结果
+                self.current_sdf_results[image_path] = sdf_result
+
+                print(f"✅ {filename}: 生成成功 ({computation_time:.3f}s)")
+
+            except Exception as e:
+                print(f"❌ {filename}: 生成失败 - {str(e)}")
+                if sdf_card:
+                    sdf_card.set_status("failed")
+
+        # 完成所有单张SDF生成
+        self.progress_bar.setValue(len(images_data))
+        self.status_label.setText(f"SDF生成完成，共处理 {len(images_data)} 张图像")
+
+        # 生成合并SDF
+        self._generate_merged_sdf(images_data)
+
+    def _generate_merged_sdf(self, images_data: list):
+        """生成合并SDF"""
+        if len(images_data) == 1:
+            # 单张图像，直接显示
+            image_path = images_data[0][0]
+            sdf_result = self.current_sdf_results.get(image_path)
+            if sdf_result is not None:
+                merged_pixmap = self._numpy_to_pixmap(sdf_result)
+                self._update_merged_sdf_preview(merged_pixmap)
+
+                # 存储为当前合并SDF并更新光照预览
+                self.current_merged_sdf = sdf_result
+                self._update_lighting_preview()
+        else:
+            # 多张图像，需要合并
+            try:
+                self.status_label.setText("正在合并SDF...")
+
+                # 准备数据
+                image_paths = [data[0] for data in images_data]
+                angles = [data[1] for data in images_data]
+
+                # 获取混合模式
+                blend_mode = self.blend_mode_combo.currentText()
+                blend_mode_map = {
+                    "智能权重": "weighted",
+                    "简单平均": "average",
+                    "最大值": "max",
+                    "最小值": "min"
+                }
+                blend_mode = blend_mode_map.get(blend_mode, "weighted")
+
+                # 生成合并SDF
+                merged_sdf, computation_time = self.sdf_generator.compute_multi_sdf(
+                    image_paths,
+                    angles=angles,
+                    threshold=0.5,
+                    normalize=True,
+                    blend_mode=blend_mode
+                )
+
+                # 显示合并结果
+                if merged_sdf is not None:
+                    merged_pixmap = self._numpy_to_pixmap(merged_sdf)
+                    self._update_merged_sdf_preview(merged_pixmap)
+
+                    # 存储合并结果
+                    self.current_merged_sdf = merged_sdf
+
+                    # 更新光照预览
+                    self._update_lighting_preview()
+
+                    print(f"✅ 合并SDF生成成功 ({computation_time:.3f}s)")
+                    self.status_label.setText(f"合并SDF生成完成 ({computation_time:.3f}s)")
+
+            except Exception as e:
+                print(f"❌ 合并SDF生成失败: {str(e)}")
+                self.status_label.setText(f"合并SDF生成失败: {str(e)}")
+
+        # 完成所有生成
+        self.progress_bar.setVisible(False)
+        self.generate_btn.setEnabled(True)
+        self.export_btn.setEnabled(True)
+
+    def _numpy_to_pixmap(self, numpy_array) -> QPixmap:
+        """将numpy数组转换为QPixmap"""
         try:
-            if len(self.current_images) == 1:
-                # 单张图像SDF
-                self._generate_single_sdf(self.current_images[0], params)
+            import numpy as np
+            from PySide6.QtGui import QImage
+
+            # 确保数组是uint8类型
+            if numpy_array.dtype != np.uint8:
+                # 归一化到0-255
+                if numpy_array.max() <= 1.0:
+                    numpy_array = (numpy_array * 255).astype(np.uint8)
+                else:
+                    numpy_array = numpy_array.astype(np.uint8)
+
+            # 处理不同的数组形状
+            if len(numpy_array.shape) == 2:
+                # 灰度图像
+                height, width = numpy_array.shape
+                bytes_per_line = width
+                q_image = QImage(numpy_array.data, width, height, bytes_per_line, QImage.Format_Grayscale8)
+            elif len(numpy_array.shape) == 3 and numpy_array.shape[2] == 3:
+                # RGB图像
+                height, width, channels = numpy_array.shape
+                bytes_per_line = width * channels
+                q_image = QImage(numpy_array.data, width, height, bytes_per_line, QImage.Format_RGB888)
             else:
-                # 多张图像混合SDF
-                self._generate_multi_sdf(self.current_images, params)
+                raise ValueError(f"不支持的数组形状: {numpy_array.shape}")
+
+            return QPixmap.fromImage(q_image)
+
         except Exception as e:
-            self._on_sdf_generation_failed(str(e))
+            print(f"转换QPixmap失败: {e}")
+            return QPixmap()
+
+    def _update_merged_sdf_preview(self, pixmap: QPixmap):
+        """更新合并SDF预览"""
+        if not pixmap.isNull():
+            # 直接设置到可缩放组件
+            self.merged_sdf_preview.set_image(pixmap)
+            # 自动适应窗口
+            self.merged_sdf_preview.fit_to_window()
+        else:
+            # 设置空图像
+            self.merged_sdf_preview.set_image(QPixmap())
 
     def _generate_single_sdf(self, image_path: str, params: dict):
         """生成单张图像SDF"""
@@ -444,8 +1030,10 @@ class MainWindow(QMainWindow):
         try:
             sdf_result, computation_time = self.sdf_generator.compute_multi_sdf(
                 image_paths,
+                angles=params.get('angles'),
                 threshold=params.get('threshold', 0.5),
-                normalize=params.get('normalize', True)
+                normalize=params.get('normalize', True),
+                blend_mode=params.get('blend_mode', 'weighted')
             )
             self._on_sdf_generated(sdf_result, computation_time)
         except Exception as e:
@@ -457,6 +1045,12 @@ class MainWindow(QMainWindow):
         self.progress_bar.setVisible(False)
         self.generate_btn.setEnabled(True)
 
+        # 调试信息
+        print(f"✅ SDF生成完成!")
+        print(f"📊 结果形状: {sdf_result.shape}")
+        print(f"📈 值域: [{sdf_result.min():.3f}, {sdf_result.max():.3f}]")
+        print(f"⏱️  计算时间: {computation_time:.3f}s")
+
         # 保存结果
         self.sdf_result = sdf_result
         self.computation_time = computation_time
@@ -466,11 +1060,9 @@ class MainWindow(QMainWindow):
         self.status_label.setText("SDF生成完成")
         self.time_label.setText(f"计算时间: {self.computation_time:.2f}s")
 
-        # 转换SDF结果为可显示的图像
-        display_image = self._convert_sdf_for_display(sdf_result)
-
-        # 更新预览
-        self.preview_widget.set_sdf_result(display_image)
+        # 直接传递原始numpy数组给预览组件
+        # 预览组件内部会处理显示转换和光照预览
+        self.preview_widget.set_sdf_result(sdf_result)
 
     def _on_sdf_generation_failed(self, error_message: str):
         """SDF生成失败"""
@@ -522,7 +1114,12 @@ class MainWindow(QMainWindow):
             file_path = file_dialog.selectedFiles()[0]
             try:
                 # 使用ImageUtils保存SDF结果
-                success = ImageUtils.save_image(self.sdf_result, file_path, quality=95)
+                if hasattr(self.sdf_result, 'shape'):
+                    # 如果是numpy数组，使用SDF专用保存方法
+                    success = ImageUtils.save_sdf_as_image(self.sdf_result, file_path, quality=95)
+                else:
+                    # 如果是其他格式，使用通用保存方法
+                    success = ImageUtils.save_image(self.sdf_result, file_path, quality=95)
 
                 if success:
                     self.status_label.setText(f"SDF已导出到: {file_path}")
@@ -546,8 +1143,23 @@ class MainWindow(QMainWindow):
 
     def _reset_view(self):
         """重置预览视图"""
-        self.preview_widget.reset_view()
+        self.merged_sdf_preview.reset_view()
         self.status_label.setText("视图已重置")
+
+    def _fit_to_window(self):
+        """适应窗口大小"""
+        self.merged_sdf_preview.fit_to_window()
+        self.status_label.setText("已适应窗口大小")
+
+    def _actual_size(self):
+        """显示实际大小"""
+        self.merged_sdf_preview.actual_size()
+        self.status_label.setText("已显示实际大小")
+
+    def _on_merged_sdf_zoom_changed(self, zoom_factor):
+        """合并SDF缩放改变"""
+        percentage = int(zoom_factor * 100)
+        self.zoom_label.setText(f"{percentage}%")
 
     def _show_about(self):
         """显示关于对话框"""
@@ -560,6 +1172,8 @@ class MainWindow(QMainWindow):
 
     def _on_images_changed(self):
         """图像列表变化时的处理"""
+        # 更新角度配置
+        self.parameter_widget.set_image_count(len(self.current_images))
         self._update_ui_state()
 
     def _on_parameters_changed(self):
@@ -591,3 +1205,245 @@ class MainWindow(QMainWindow):
             event.accept()
         else:
             event.ignore()
+
+    # 批量处理方法
+    def _batch_import_folder(self):
+        """批量导入文件夹"""
+        folder_path = QFileDialog.getExistingDirectory(
+            self, "选择图像文件夹", "",
+            QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks
+        )
+
+        if not folder_path:
+            return
+
+        try:
+            # 支持的图像格式
+            supported_formats = {'.png', '.jpg', '.jpeg', '.bmp', '.tga', '.tiff'}
+
+            # 扫描文件夹中的图像文件
+            image_files = []
+            folder = Path(folder_path)
+
+            for file_path in folder.rglob('*'):
+                if file_path.is_file() and file_path.suffix.lower() in supported_formats:
+                    image_files.append(str(file_path))
+
+            if not image_files:
+                QMessageBox.information(self, "提示", "文件夹中没有找到支持的图像文件")
+                return
+
+            # 询问是否替换当前图像
+            if self.current_images:
+                reply = QMessageBox.question(
+                    self, "确认导入",
+                    f"找到 {len(image_files)} 个图像文件。\n是否替换当前已导入的图像？",
+                    QMessageBox.Yes | QMessageBox.No,
+                    QMessageBox.No
+                )
+
+                if reply != QMessageBox.Yes:
+                    return
+
+            # 导入图像
+            self.current_images = sorted(image_files)  # 按文件名排序
+            self.image_list.set_images(self.current_images)
+
+            # 更新角度配置
+            self.parameter_widget.set_image_count(len(self.current_images))
+
+            self.status_label.setText(f"批量导入完成：{len(image_files)} 个图像文件")
+            print(f"📁 批量导入完成: {len(image_files)} 个图像文件")
+
+        except Exception as e:
+            QMessageBox.warning(self, "导入错误", f"批量导入时发生错误：\n{str(e)}")
+
+    def _batch_generate_sdf(self):
+        """批量生成SDF"""
+        if not self.current_images:
+            QMessageBox.information(self, "提示", "请先导入图像")
+            return
+
+        # 询问生成模式
+        reply = QMessageBox.question(
+            self, "批量生成模式",
+            "选择批量生成模式：\n\n"
+            "是(Yes): 为每张图像单独生成SDF\n"
+            "否(No): 将所有图像混合生成一个SDF\n"
+            "取消: 取消操作",
+            QMessageBox.Yes | QMessageBox.No | QMessageBox.Cancel,
+            QMessageBox.Yes
+        )
+
+        if reply == QMessageBox.Cancel:
+            return
+
+        self.batch_processing = True
+        self.batch_sdf_results.clear()
+
+        # 获取参数
+        params = self.parameter_widget.get_sdf_params()
+
+        try:
+            if reply == QMessageBox.Yes:
+                # 单独生成模式
+                self._batch_generate_individual(params)
+            else:
+                # 混合生成模式
+                self._batch_generate_mixed(params)
+
+        except Exception as e:
+            self._on_sdf_generation_failed(str(e))
+        finally:
+            self.batch_processing = False
+
+    def _batch_generate_individual(self, params: dict):
+        """批量单独生成SDF"""
+        print(f"🔄 开始批量单独生成SDF: {len(self.current_images)} 张图像")
+
+        # 显示进度
+        self.progress_bar.setVisible(True)
+        self.progress_bar.setRange(0, len(self.current_images))
+        self.generate_btn.setEnabled(False)
+
+        total_time = 0.0
+        success_count = 0
+
+        for i, image_path in enumerate(self.current_images):
+            try:
+                self.status_label.setText(f"正在处理: {Path(image_path).name} ({i+1}/{len(self.current_images)})")
+                self.progress_bar.setValue(i)
+
+                # 生成单张SDF
+                sdf_result, computation_time = self.sdf_generator.compute_single_sdf(
+                    image_path,
+                    threshold=params.get('threshold', 0.5),
+                    normalize=params.get('normalize', True),
+                    invert=params.get('invert', False)
+                )
+
+                # 保存结果
+                self.batch_sdf_results[image_path] = sdf_result
+                total_time += computation_time
+                success_count += 1
+
+                print(f"  ✅ {Path(image_path).name}: 成功 ({computation_time:.3f}s)")
+
+            except Exception as e:
+                print(f"  ❌ {Path(image_path).name}: 失败 - {str(e)}")
+
+        # 完成
+        self.progress_bar.setValue(len(self.current_images))
+        self.progress_bar.setVisible(False)
+        self.generate_btn.setEnabled(True)
+
+        # 显示最后一个成功的结果
+        if success_count > 0:
+            last_result = list(self.batch_sdf_results.values())[-1]
+            self.sdf_result = last_result
+            self.preview_widget.set_sdf_result(last_result)
+
+        self.status_label.setText(f"批量生成完成: {success_count}/{len(self.current_images)} 成功, 总时间 {total_time:.3f}s")
+        print(f"🎉 批量单独生成完成: {success_count}/{len(self.current_images)} 成功")
+
+    def _batch_generate_mixed(self, params: dict):
+        """批量混合生成SDF"""
+        print(f"🔄 开始批量混合生成SDF: {len(self.current_images)} 张图像")
+
+        # 显示进度
+        self.progress_bar.setVisible(True)
+        self.progress_bar.setRange(0, 0)  # 不确定进度
+        self.generate_btn.setEnabled(False)
+        self.status_label.setText("正在生成混合SDF...")
+
+        try:
+            # 生成混合SDF
+            sdf_result, computation_time = self.sdf_generator.compute_multi_sdf(
+                self.current_images,
+                angles=params.get('angles'),
+                threshold=params.get('threshold', 0.5),
+                normalize=params.get('normalize', True),
+                blend_mode=params.get('blend_mode', 'weighted')
+            )
+
+            # 保存结果
+            self.batch_sdf_results['mixed_result'] = sdf_result
+            self._on_sdf_generated(sdf_result, computation_time)
+
+            print(f"🎉 批量混合生成完成: {computation_time:.3f}s")
+
+        except Exception as e:
+            raise e
+        finally:
+            self.progress_bar.setVisible(False)
+            self.generate_btn.setEnabled(True)
+
+    def _batch_export_sdf(self):
+        """批量导出SDF"""
+        if not self.batch_sdf_results:
+            QMessageBox.information(self, "提示", "没有可导出的SDF结果\n请先进行批量生成")
+            return
+
+        # 选择导出文件夹
+        export_folder = QFileDialog.getExistingDirectory(
+            self, "选择导出文件夹", "",
+            QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks
+        )
+
+        if not export_folder:
+            return
+
+        try:
+            export_path = Path(export_folder)
+            export_path.mkdir(exist_ok=True)
+
+            # 显示进度
+            self.progress_bar.setVisible(True)
+            self.progress_bar.setRange(0, len(self.batch_sdf_results))
+
+            success_count = 0
+
+            for i, (source_path, sdf_result) in enumerate(self.batch_sdf_results.items()):
+                try:
+                    # 生成输出文件名
+                    if source_path == 'mixed_result':
+                        output_name = "mixed_sdf_result.png"
+                    else:
+                        source_name = Path(source_path).stem
+                        output_name = f"{source_name}_sdf.png"
+
+                    output_path = export_path / output_name
+
+                    self.status_label.setText(f"正在导出: {output_name} ({i+1}/{len(self.batch_sdf_results)})")
+                    self.progress_bar.setValue(i)
+
+                    # 导出SDF
+                    from ..utils.image_utils import ImageUtils
+                    if ImageUtils.save_sdf_as_image(sdf_result, str(output_path)):
+                        success_count += 1
+                        print(f"  ✅ 导出成功: {output_name}")
+                    else:
+                        print(f"  ❌ 导出失败: {output_name}")
+
+                except Exception as e:
+                    print(f"  ❌ 导出失败: {output_name} - {str(e)}")
+
+            # 完成
+            self.progress_bar.setValue(len(self.batch_sdf_results))
+            self.progress_bar.setVisible(False)
+
+            self.status_label.setText(f"批量导出完成: {success_count}/{len(self.batch_sdf_results)} 成功")
+
+            if success_count > 0:
+                QMessageBox.information(
+                    self, "导出完成",
+                    f"批量导出完成！\n\n"
+                    f"成功: {success_count}/{len(self.batch_sdf_results)}\n"
+                    f"导出位置: {export_folder}"
+                )
+
+            print(f"🎉 批量导出完成: {success_count}/{len(self.batch_sdf_results)} 成功")
+
+        except Exception as e:
+            QMessageBox.warning(self, "导出错误", f"批量导出时发生错误：\n{str(e)}")
+            self.progress_bar.setVisible(False)

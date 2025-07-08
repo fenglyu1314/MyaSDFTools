@@ -18,7 +18,7 @@ persona:
   "变量定义": {
     "PROJECT_ROOT": "./",
     "SRC_ROOT": "./src",
-    "project_name": "BadgePatternTool"
+    "project_name": "mya_sdf_Tools"
   },
   "响应语言": {
     "回复": "中文",
@@ -57,16 +57,18 @@ persona:
 ## 4. 项目结构规范
 
 ```
-BadgePatternTool/
+mya_sdf_Tools/
 ├── src/
 │   ├── main.py          # 主入口文件
 │   ├── ui/              # 界面相关
 │   ├── core/            # 核心业务逻辑
 │   ├── utils/           # 工具函数
-│   └── config/          # 配置文件
+│   └── cpp/             # C++算法实现
 ├── tests/               # 测试文件
 ├── docs/                # 文档
+├── examples/            # 示例文件
 ├── requirements.txt     # 依赖列表
+├── CMakeLists.txt      # C++构建配置
 └── README.md           # 项目说明
 ```
 

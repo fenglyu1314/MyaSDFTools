@@ -15,8 +15,8 @@ import math
 from typing import Optional
 
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QSlider, 
-    QCheckBox, QPushButton, QFrame, QScrollArea, QSizePolicy
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QSlider,
+    QCheckBox, QPushButton, QFrame, QScrollArea, QSizePolicy, QSplitter, QTabWidget
 )
 from PySide6.QtCore import Qt, Signal, QSize, QTimer
 from PySide6.QtGui import QPixmap, QPainter, QPen, QColor, QFont
@@ -282,161 +282,190 @@ class PreviewWidget(QWidget):
         super().__init__(parent)
         self.sdf_result = None
         self.light_angle = 0.0
-        
+        self.lighting_intensity = 1.0
+        self.ambient_light = 0.3
+
+        # 预览图像组件将在_init_ui中创建
+        self.sdf_preview_image = None
+        self.lighting_preview_image = None
+
         self._init_ui()
         self._connect_signals()
     
     def _init_ui(self):
         """初始化UI"""
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(5, 5, 5, 5)
-        layout.setSpacing(10)
-        
+        layout.setContentsMargins(3, 3, 3, 3)  # 减少边距
+        layout.setSpacing(5)  # 减少间距
+
         # 控制面板
         control_panel = self._create_control_panel()
         layout.addWidget(control_panel)
-        
-        # 预览区域
-        preview_area = self._create_preview_area()
-        layout.addWidget(preview_area)
+
+        # 预览区域 - 使用标签页替代分割器
+        preview_tabs = self._create_preview_tabs()
+        layout.addWidget(preview_tabs)
     
     def _create_control_panel(self) -> QWidget:
-        """创建控制面板"""
+        """创建简化的控制面板"""
         panel = QFrame()
         panel.setFrameStyle(QFrame.Box)
-        panel.setMaximumHeight(120)
-        
-        layout = QVBoxLayout(panel)
-        layout.setContentsMargins(10, 10, 10, 10)
-        layout.setSpacing(8)
-        
-        # 光照角度控制
-        angle_layout = QHBoxLayout()
-        
-        angle_label = QLabel("光照角度:")
-        angle_label.setMinimumWidth(80)
-        angle_layout.addWidget(angle_label)
-        
+        panel.setMaximumHeight(60)  # 从120px减少到60px
+
+        layout = QHBoxLayout(panel)  # 改为水平布局
+        layout.setContentsMargins(8, 5, 8, 5)  # 减少边距
+        layout.setSpacing(10)
+
+        # 光照角度控制 - 紧凑版
+        angle_label = QLabel("光照:")
+        angle_label.setMinimumWidth(40)  # 减少宽度
+        layout.addWidget(angle_label)
+
         self.angle_slider = QSlider(Qt.Horizontal)
         self.angle_slider.setRange(0, 360)
         self.angle_slider.setValue(0)
-        self.angle_slider.setTickPosition(QSlider.TicksBelow)
-        self.angle_slider.setTickInterval(45)
-        angle_layout.addWidget(self.angle_slider)
-        
+        self.angle_slider.setMaximumWidth(150)  # 限制宽度
+        layout.addWidget(self.angle_slider)
+
         self.angle_value_label = QLabel("0°")
-        self.angle_value_label.setMinimumWidth(40)
+        self.angle_value_label.setMinimumWidth(30)  # 减少宽度
         self.angle_value_label.setAlignment(Qt.AlignCenter)
-        angle_layout.addWidget(self.angle_value_label)
-        
-        layout.addLayout(angle_layout)
-        
-        # 视图控制
-        view_layout = QHBoxLayout()
-        
-        # 缩放控制
-        zoom_label = QLabel("缩放:")
-        zoom_label.setMinimumWidth(80)
-        view_layout.addWidget(zoom_label)
-        
-        self.zoom_slider = QSlider(Qt.Horizontal)
-        self.zoom_slider.setRange(10, 500)  # 0.1x 到 5.0x
-        self.zoom_slider.setValue(100)  # 1.0x
-        view_layout.addWidget(self.zoom_slider)
-        
-        self.zoom_value_label = QLabel("100%")
-        self.zoom_value_label.setMinimumWidth(50)
-        self.zoom_value_label.setAlignment(Qt.AlignCenter)
-        view_layout.addWidget(self.zoom_value_label)
-        
-        # 网格显示
-        self.grid_checkbox = QCheckBox("显示网格")
-        view_layout.addWidget(self.grid_checkbox)
-        
-        # 适应窗口按钮
-        self.fit_window_btn = QPushButton("适应窗口")
-        self.fit_window_btn.setMaximumWidth(80)
-        view_layout.addWidget(self.fit_window_btn)
+        layout.addWidget(self.angle_value_label)
 
-        # 实际大小按钮
-        self.actual_size_btn = QPushButton("实际大小")
-        self.actual_size_btn.setMaximumWidth(80)
-        view_layout.addWidget(self.actual_size_btn)
+        # 光照强度控制 - 紧凑版
+        intensity_label = QLabel("强度:")
+        intensity_label.setMinimumWidth(40)
+        layout.addWidget(intensity_label)
 
-        # 重置视图按钮
-        self.reset_view_btn = QPushButton("重置视图")
-        self.reset_view_btn.setMaximumWidth(80)
-        view_layout.addWidget(self.reset_view_btn)
-        
-        layout.addLayout(view_layout)
+        self.intensity_slider = QSlider(Qt.Horizontal)
+        self.intensity_slider.setRange(0, 200)  # 0.0 到 2.0
+        self.intensity_slider.setValue(100)  # 1.0
+        self.intensity_slider.setMaximumWidth(100)  # 限制宽度
+        layout.addWidget(self.intensity_slider)
+
+        self.intensity_value_label = QLabel("1.0")
+        self.intensity_value_label.setMinimumWidth(30)
+        self.intensity_value_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self.intensity_value_label)
+
+        # 环境光控制 - 紧凑版
+        ambient_label = QLabel("环境:")
+        ambient_label.setMinimumWidth(40)
+        layout.addWidget(ambient_label)
+
+        self.ambient_slider = QSlider(Qt.Horizontal)
+        self.ambient_slider.setRange(0, 100)  # 0.0 到 1.0
+        self.ambient_slider.setValue(30)  # 0.3
+        self.ambient_slider.setMaximumWidth(100)  # 限制宽度
+        layout.addWidget(self.ambient_slider)
+
+        self.ambient_value_label = QLabel("0.3")
+        self.ambient_value_label.setMinimumWidth(30)
+        self.ambient_value_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self.ambient_value_label)
+
+        # 添加弹性空间
+        layout.addStretch()
         
         return panel
     
-    def _create_preview_area(self) -> QWidget:
-        """创建预览区域"""
-        # 滚动区域
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setAlignment(Qt.AlignCenter)
-        scroll_area.setStyleSheet("""
-            QScrollArea {
+    def _create_preview_tabs(self) -> QWidget:
+        """创建预览标签页"""
+        tab_widget = QTabWidget()
+        tab_widget.setStyleSheet("""
+            QTabWidget::pane {
                 border: 1px solid #CCCCCC;
-                background-color: #FAFAFA;
+                background-color: white;
+            }
+            QTabBar::tab {
+                background-color: #F5F5F5;
+                padding: 8px 16px;
+                margin-right: 2px;
+                border: 1px solid #CCCCCC;
+                border-bottom: none;
+            }
+            QTabBar::tab:selected {
+                background-color: white;
+                border-bottom: 1px solid white;
             }
         """)
-        
-        # 预览图像组件
-        self.preview_image = PreviewImageWidget()
-        scroll_area.setWidget(self.preview_image)
 
-        # 连接缩放信号
-        self.preview_image.zoom_changed.connect(self.update_zoom_slider)
-        
-        return scroll_area
+        # SDF预览标签页
+        sdf_area = self._create_sdf_preview_area()
+        tab_widget.addTab(sdf_area, "原始SDF")
+
+        # 光照效果预览标签页
+        lighting_area = self._create_lighting_preview_area()
+        tab_widget.addTab(lighting_area, "光照效果")
+
+        return tab_widget
+
+    def _create_sdf_preview_area(self) -> QWidget:
+        """创建SDF预览区域"""
+        area = QWidget()  # 移除边框
+
+        layout = QVBoxLayout(area)
+        layout.setContentsMargins(3, 3, 3, 3)  # 减少边距
+
+        # SDF预览图像 - 直接添加，无需滚动区域
+        self.sdf_preview_image = PreviewImageWidget()
+        layout.addWidget(self.sdf_preview_image)
+
+        return area
+
+    def _create_lighting_preview_area(self) -> QWidget:
+        """创建光照效果预览区域"""
+        area = QWidget()  # 移除边框
+
+        layout = QVBoxLayout(area)
+        layout.setContentsMargins(3, 3, 3, 3)  # 减少边距
+
+        # 光照预览图像 - 直接添加，无需滚动区域
+        self.lighting_preview_image = PreviewImageWidget()
+        layout.addWidget(self.lighting_preview_image)
+
+        return area
+
+
     
     def _connect_signals(self):
         """连接信号"""
         # 角度滑竿
         self.angle_slider.valueChanged.connect(self._on_angle_changed)
-        
-        # 缩放滑竿
-        self.zoom_slider.valueChanged.connect(self._on_zoom_changed)
-        
-        # 网格复选框
-        self.grid_checkbox.toggled.connect(self._on_grid_toggled)
-        
-        # 视图控制按钮
-        self.fit_window_btn.clicked.connect(self._on_fit_window)
-        self.actual_size_btn.clicked.connect(self._on_actual_size)
-        self.reset_view_btn.clicked.connect(self._on_reset_view)
+
+        # 光照控制滑竿
+        self.intensity_slider.valueChanged.connect(self._on_intensity_changed)
+        self.ambient_slider.valueChanged.connect(self._on_ambient_changed)
+
+        # 连接缩放信号（如果预览图像已创建）
+        # 注意：简化版本中移除了缩放滑竿，这里不需要连接信号
     
     def set_sdf_result(self, sdf_result):
         """设置SDF结果"""
+        print(f"🔧 设置SDF结果: 类型={type(sdf_result)}")
+
         self.sdf_result = sdf_result
 
-        # 如果传入的是QPixmap，直接显示
+        # 更新原始SDF预览
         if isinstance(sdf_result, QPixmap):
-            self.preview_image.set_pixmap(sdf_result)
+            # 如果是QPixmap，直接显示
+            print("📷 显示QPixmap到原始SDF预览")
+            if self.sdf_preview_image:
+                self.sdf_preview_image.set_pixmap(sdf_result)
         else:
-            # 如果是numpy数组，转换为QPixmap
-            try:
-                from ..utils.image_utils import ImageUtils
-                pil_image = ImageUtils.numpy_to_pil(sdf_result)
+            # 如果是numpy数组，转换后显示
+            if hasattr(sdf_result, 'shape') and self.sdf_preview_image:
+                print(f"🔢 转换numpy数组到原始SDF预览: 形状={sdf_result.shape}")
+                pixmap = self._numpy_to_pixmap(sdf_result)
+                if pixmap:
+                    self.sdf_preview_image.set_pixmap(pixmap)
+                    print("✅ 原始SDF预览更新成功")
+                else:
+                    print("❌ 转换QPixmap失败")
 
-                # 转换为QPixmap
-                import io
-                img_bytes = io.BytesIO()
-                pil_image.save(img_bytes, format='PNG')
-                img_bytes.seek(0)
-
-                pixmap = QPixmap()
-                pixmap.loadFromData(img_bytes.getvalue())
-                self.preview_image.set_pixmap(pixmap)
-
-            except Exception as e:
-                print(f"转换SDF结果显示失败: {e}")
-                # 如果转换失败，显示错误信息
-                self.preview_image.setText("SDF显示错误\n\n请检查数据格式")
+        # 更新光照效果预览
+        print("🔆 开始更新光照效果预览")
+        self._update_lighting_preview()
     
     def _create_mock_sdf_image(self):
         """创建模拟的SDF图像"""
@@ -464,65 +493,222 @@ class PreviewWidget(QWidget):
         
         painter.end()
         
-        self.preview_image.set_pixmap(pixmap)
-    
+        if self.sdf_preview_image:
+            self.sdf_preview_image.set_pixmap(pixmap)
+
     def clear(self):
         """清空预览"""
         self.sdf_result = None
-        self.preview_image.original_pixmap = None
-        self.preview_image.current_pixmap = None
-        self.preview_image._show_placeholder()
-    
+        if self.sdf_preview_image:
+            self.sdf_preview_image.original_pixmap = None
+            self.sdf_preview_image.current_pixmap = None
+            self.sdf_preview_image._show_placeholder()
+        if self.lighting_preview_image:
+            self.lighting_preview_image.original_pixmap = None
+            self.lighting_preview_image.current_pixmap = None
+            self.lighting_preview_image._show_placeholder()
+
     def reset_view(self):
         """重置视图"""
         self.angle_slider.setValue(0)
-        self.zoom_slider.setValue(100)
-        self.grid_checkbox.setChecked(False)
-        self.preview_image.reset_view()
+        if self.sdf_preview_image:
+            self.sdf_preview_image.reset_view()
+        if self.lighting_preview_image:
+            self.lighting_preview_image.reset_view()
     
     def _on_angle_changed(self, value):
         """角度变化处理"""
         self.light_angle = value
-        self.angle_value_label.setText(f"{value}°")
-        
-        # TODO: 根据角度更新SDF预览效果
-        # 这里可以实现实时的光照效果预览
+
+        # 添加方向提示
+        direction_hint = self._get_direction_hint(value)
+        self.angle_value_label.setText(f"{value}° ({direction_hint})")
+
+        # 实时更新光照效果预览
+        self._update_lighting_preview()
+
+    def _get_direction_hint(self, angle: float) -> str:
+        """获取角度对应的方向提示"""
+        angle = angle % 360
+        if angle < 22.5 or angle >= 337.5:
+            return "右"
+        elif angle < 67.5:
+            return "右下"
+        elif angle < 112.5:
+            return "下"
+        elif angle < 157.5:
+            return "左下"
+        elif angle < 202.5:
+            return "左"
+        elif angle < 247.5:
+            return "左上"
+        elif angle < 292.5:
+            return "上"
+        else:
+            return "右上"
+
+    def _on_intensity_changed(self, value):
+        """光照强度变化处理"""
+        intensity = value / 100.0  # 转换为0.0-2.0范围
+        self.intensity_value_label.setText(f"{intensity:.1f}")
+        self._update_lighting_preview()
+
+    def _on_ambient_changed(self, value):
+        """环境光变化处理"""
+        ambient = value / 100.0  # 转换为0.0-1.0范围
+        self.ambient_value_label.setText(f"{ambient:.1f}")
+        self._update_lighting_preview()
     
     def _on_zoom_changed(self, value):
         """缩放变化处理"""
         zoom_factor = value / 100.0
         self.zoom_value_label.setText(f"{int(zoom_factor * 100)}%")
-        self.preview_image.set_zoom(zoom_factor)
+        # 同时缩放两个预览区域
+        if self.sdf_preview_image:
+            self.sdf_preview_image.set_zoom(zoom_factor)
+        if self.lighting_preview_image:
+            self.lighting_preview_image.set_zoom(zoom_factor)
 
-    def update_zoom_slider(self, zoom_factor):
-        """更新缩放滑竿显示"""
-        self.zoom_slider.blockSignals(True)
-        self.zoom_slider.setValue(int(zoom_factor * 100))
-        self.zoom_value_label.setText(f"{int(zoom_factor * 100)}%")
-        self.zoom_slider.blockSignals(False)
-    
     def _on_grid_toggled(self, checked):
-        """网格显示切换"""
-        self.preview_image.set_grid_visible(checked)
-    
+        """网格显示切换 - 简化版本中暂时禁用"""
+        # 简化版本中移除了网格控件
+        pass
+
     def _on_fit_window(self):
         """适应窗口按钮处理"""
-        self.preview_image.fit_to_window()
+        if self.sdf_preview_image:
+            self.sdf_preview_image.fit_to_window()
+        if self.lighting_preview_image:
+            self.lighting_preview_image.fit_to_window()
 
     def _on_actual_size(self):
         """实际大小按钮处理"""
-        self.preview_image.zoom_factor = 1.0
-        self.preview_image.fit_to_window = False
-        self.preview_image.offset_x = 0
-        self.preview_image.offset_y = 0
-        self.preview_image._update_display()
+        for preview_image in [self.sdf_preview_image, self.lighting_preview_image]:
+            if preview_image:
+                preview_image.zoom_factor = 1.0
+                preview_image.fit_to_window = False
+                preview_image.offset_x = 0
+                preview_image.offset_y = 0
+                preview_image._update_display()
 
-        # 更新缩放滑竿
-        self.zoom_slider.blockSignals(True)
-        self.zoom_slider.setValue(100)
-        self.zoom_value_label.setText("100%")
-        self.zoom_slider.blockSignals(False)
+        # 简化版本中移除了缩放滑竿
+        pass
 
     def _on_reset_view(self):
         """重置视图按钮处理"""
         self.reset_view()
+
+    def fit_to_window(self):
+        """适应窗口大小"""
+        if self.sdf_preview_image:
+            self.sdf_preview_image.fit_to_window = True
+            self.sdf_preview_image._fit_to_window()
+        if self.lighting_preview_image:
+            self.lighting_preview_image.fit_to_window = True
+            self.lighting_preview_image._fit_to_window()
+
+    def actual_size(self):
+        """显示实际大小"""
+        if self.sdf_preview_image:
+            self.sdf_preview_image.set_zoom(1.0)
+        if self.lighting_preview_image:
+            self.lighting_preview_image.set_zoom(1.0)
+
+    def _update_lighting_preview(self):
+        """更新光照效果预览"""
+        print(f"🔆 _update_lighting_preview 被调用")
+        print(f"   SDF结果: {type(self.sdf_result) if self.sdf_result is not None else 'None'}")
+        print(f"   光照预览图像: {'存在' if self.lighting_preview_image else '不存在'}")
+
+        if self.sdf_result is None:
+            print("⚠️ SDF结果为空，跳过光照预览更新")
+            return
+
+        if not self.lighting_preview_image:
+            print("⚠️ 光照预览图像组件不存在，跳过更新")
+            return
+
+        try:
+            # 如果sdf_result是numpy数组，使用SDF生成器的预览功能
+            if hasattr(self.sdf_result, 'shape'):
+                print(f"🔢 处理numpy数组: 形状={self.sdf_result.shape}")
+
+                try:
+                    from ..core.sdf_generator import SDFGenerator
+                except ImportError:
+                    # 如果相对导入失败，尝试绝对导入
+                    import sys
+                    from pathlib import Path
+                    sys.path.insert(0, str(Path(__file__).parent.parent))
+                    from core.sdf_generator import SDFGenerator
+                generator = SDFGenerator()
+
+                # 获取当前光照参数
+                lighting_intensity = self.intensity_slider.value() / 100.0
+                ambient_light = self.ambient_slider.value() / 100.0
+
+                print(f"🔆 光照参数: 角度={self.light_angle}°, 强度={lighting_intensity:.1f}, 环境光={ambient_light:.1f}")
+
+                # 生成光照预览效果
+                lighting_result = generator.preview_lighting(
+                    self.sdf_result,
+                    self.light_angle,
+                    lighting_intensity,
+                    ambient_light
+                )
+
+                print(f"🎨 光照结果: 形状={lighting_result.shape}, 值域=[{lighting_result.min():.3f}, {lighting_result.max():.3f}]")
+
+                # 转换为QPixmap并显示到光照预览区域
+                pixmap = self._numpy_to_pixmap(lighting_result)
+                if pixmap:
+                    print(f"🖼️ 设置光照预览QPixmap: 大小={pixmap.size()}")
+                    self.lighting_preview_image.set_pixmap(pixmap)
+                    print(f"✅ 光照预览更新成功")
+                else:
+                    print(f"❌ 转换QPixmap失败")
+            else:
+                print(f"⚠️ SDF结果不是numpy数组: {type(self.sdf_result)}")
+                # 如果是QPixmap，也尝试显示到光照预览区域
+                if isinstance(self.sdf_result, QPixmap):
+                    print("📷 直接显示QPixmap到光照预览区域")
+                    self.lighting_preview_image.set_pixmap(self.sdf_result)
+
+        except Exception as e:
+            print(f"❌ 更新光照预览失败: {e}")
+            import traceback
+            traceback.print_exc()
+
+    def _numpy_to_pixmap(self, numpy_array) -> QPixmap:
+        """将numpy数组转换为QPixmap"""
+        try:
+            try:
+                from ..utils.image_utils import ImageUtils
+            except ImportError:
+                # 如果相对导入失败，尝试绝对导入
+                import sys
+                from pathlib import Path
+                sys.path.insert(0, str(Path(__file__).parent.parent))
+                from utils.image_utils import ImageUtils
+
+            # 确保数据在[0,1]范围内
+            normalized_data = numpy_array.copy()
+            if normalized_data.max() > 1.0 or normalized_data.min() < 0.0:
+                normalized_data = (normalized_data - normalized_data.min()) / (normalized_data.max() - normalized_data.min())
+
+            # 转换为PIL图像
+            pil_image = ImageUtils.numpy_to_pil(normalized_data)
+
+            # 转换为QPixmap
+            import io
+            img_bytes = io.BytesIO()
+            pil_image.save(img_bytes, format='PNG')
+            img_bytes.seek(0)
+
+            pixmap = QPixmap()
+            pixmap.loadFromData(img_bytes.getvalue())
+            return pixmap
+
+        except Exception as e:
+            print(f"numpy转QPixmap失败: {e}")
+            return None
