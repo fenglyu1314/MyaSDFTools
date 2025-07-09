@@ -33,8 +33,8 @@ class ImageCardWidget(QFrame):
         super().__init__(parent)
         self.image_path = image_path
         self.angle = angle
-        
-        self.setFixedSize(120, 180)  # 卡片固定大小
+
+        self.setFixedSize(110, 160)  # 缩小卡片尺寸避免重叠
         self.setFrameStyle(QFrame.Box)
         self.setLineWidth(1)
         self.setStyleSheet("""
@@ -47,7 +47,7 @@ class ImageCardWidget(QFrame):
                 border: 1px solid #2196F3;
             }
         """)
-        
+
         self._init_ui()
         self._load_thumbnail()
     
@@ -55,11 +55,11 @@ class ImageCardWidget(QFrame):
         """初始化UI"""
         layout = QVBoxLayout(self)
         layout.setContentsMargins(5, 5, 5, 5)
-        layout.setSpacing(5)
-        
-        # 缩略图区域 (100x100)
+        layout.setSpacing(3)  # 减少间距
+
+        # 缩略图区域 (80x80)
         self.thumbnail_label = QLabel()
-        self.thumbnail_label.setFixedSize(100, 100)
+        self.thumbnail_label.setFixedSize(80, 80)
         self.thumbnail_label.setAlignment(Qt.AlignCenter)
         self.thumbnail_label.setStyleSheet("""
             QLabel {
@@ -69,14 +69,15 @@ class ImageCardWidget(QFrame):
             }
         """)
         layout.addWidget(self.thumbnail_label, 0, Qt.AlignHCenter)
-        
+
         # 文件名显示
         filename = Path(self.image_path).name
         if len(filename) > 12:
             filename = filename[:9] + "..."
-        
+
         self.filename_label = QLabel(filename)
         self.filename_label.setAlignment(Qt.AlignCenter)
+        self.filename_label.setFixedHeight(16)  # 固定高度
         self.filename_label.setStyleSheet("""
             QLabel {
                 font-size: 11px;
@@ -85,21 +86,23 @@ class ImageCardWidget(QFrame):
             }
         """)
         layout.addWidget(self.filename_label)
-        
+
         # 角度输入区域
         angle_layout = QHBoxLayout()
         angle_layout.setContentsMargins(0, 0, 0, 0)
         angle_layout.setSpacing(3)
-        
+
         angle_label = QLabel("角度:")
+        angle_label.setFixedHeight(18)  # 固定高度
         angle_label.setStyleSheet("font-size: 10px; color: #666666;")
         angle_layout.addWidget(angle_label)
-        
+
         self.angle_spinbox = QSpinBox()
         self.angle_spinbox.setRange(0, 359)
         self.angle_spinbox.setValue(self.angle)
         self.angle_spinbox.setSuffix("°")
         self.angle_spinbox.setFixedWidth(60)
+        self.angle_spinbox.setFixedHeight(18)  # 减少高度
         self.angle_spinbox.setStyleSheet("""
             QSpinBox {
                 font-size: 10px;
@@ -109,19 +112,19 @@ class ImageCardWidget(QFrame):
             }
         """)
         angle_layout.addWidget(self.angle_spinbox)
-        
+
         layout.addLayout(angle_layout)
         
-        # 删除按钮
-        self.remove_btn = QPushButton("×")
-        self.remove_btn.setFixedSize(20, 20)
+        # 删除按钮 - 改为更小的按钮
+        self.remove_btn = QPushButton("删除")
+        self.remove_btn.setFixedSize(70, 20)  # 减少尺寸
         self.remove_btn.setStyleSheet("""
             QPushButton {
                 background-color: #FF5722;
                 color: white;
                 border: none;
-                border-radius: 10px;
-                font-size: 12px;
+                border-radius: 4px;
+                font-size: 11px;
                 font-weight: bold;
             }
             QPushButton:hover {
@@ -209,28 +212,27 @@ class ImageCardsContainer(QWidget):
     def _init_ui(self):
         """初始化UI"""
         self.layout = QHBoxLayout(self)
-        self.layout.setContentsMargins(0, 0, 0, 0)
-        self.layout.setSpacing(10)
-        self.layout.addStretch()  # 左对齐
+        #self.layout.setContentsMargins(4, 4, 4, 4)
+        #self.layout.setSpacing(10)  # 增加间距避免重叠
+        self.layout.setAlignment(Qt.AlignLeft | Qt.AlignTop)  # 左对齐并顶部对齐
     
     def add_image(self, image_path: str, angle: int = None) -> bool:
         """添加图像卡片"""
         if len(self.image_cards) >= self.max_images:
             return False
-        
-        # 自动分配角度
-        if angle is None:
-            angle = self._calculate_auto_angle()
-        
-        # 创建图像卡片
-        card = ImageCardWidget(image_path, angle)
+
+        # 创建图像卡片，先使用临时角度0
+        card = ImageCardWidget(image_path, 0)
         card.angle_changed.connect(self.angle_changed.emit)
         card.remove_requested.connect(self._remove_image)
-        
+
         # 添加到布局
         self.layout.insertWidget(len(self.image_cards), card)
         self.image_cards.append(card)
-        
+
+        # 重新分配所有角度
+        self._redistribute_angles()
+
         self.images_changed.emit()
         return True
     
@@ -251,24 +253,19 @@ class ImageCardsContainer(QWidget):
                 self.images_changed.emit()
                 break
     
-    def _calculate_auto_angle(self) -> int:
-        """计算自动分配的角度"""
-        count = len(self.image_cards) + 1
-        if count == 1:
-            return 0
-        return int(360 / count * len(self.image_cards))
+
     
     def _redistribute_angles(self):
-        """重新分配所有角度"""
+        """重新分配所有角度 - 180度均匀分布"""
         count = len(self.image_cards)
         if count == 0:
             return
-        
+
         for i, card in enumerate(self.image_cards):
             if count == 1:
                 angle = 0
             else:
-                angle = int(360 / count * i)
+                angle = int(180 / count * i)
             card.set_angle(angle)
     
     def clear(self):

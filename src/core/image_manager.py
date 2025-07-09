@@ -37,30 +37,39 @@ class ImageInfo:
     def _load_info(self):
         """加载图像信息"""
         try:
+            # 检查文件是否存在
+            if not os.path.exists(self.file_path):
+                raise FileNotFoundError(f"文件不存在: {self.file_path}")
+
             # 文件信息
             self.file_size = os.path.getsize(self.file_path)
-            
+
             # 图像信息
             with Image.open(self.file_path) as img:
                 self.width, self.height = img.size
                 self.format = img.format or "Unknown"
                 self.mode = img.mode
-                
+
                 # 计算通道数
-                if self.mode == 'L':
-                    self.channels = 1
-                elif self.mode == 'RGB':
-                    self.channels = 3
-                elif self.mode == 'RGBA':
-                    self.channels = 4
-                else:
-                    self.channels = len(img.getbands()) if hasattr(img, 'getbands') else 1
-            
+                self.channels = self._get_channel_count(img)
+
             # 计算文件哈希
             self.hash = self._calculate_hash()
-            
+
         except Exception as e:
-            print(f"加载图像信息失败 {self.file_path}: {e}")
+            print(f"❌ 加载图像信息失败 {self.file_path}: {e}")
+
+    def _get_channel_count(self, img: Image.Image) -> int:
+        """获取图像通道数"""
+        mode_channels = {
+            'L': 1,      # 灰度
+            'RGB': 3,    # RGB
+            'RGBA': 4,   # RGBA
+            'CMYK': 4,   # CMYK
+            'P': 1,      # 调色板
+        }
+
+        return mode_channels.get(img.mode, len(img.getbands()) if hasattr(img, 'getbands') else 1)
     
     def _calculate_hash(self) -> str:
         """计算文件哈希值"""

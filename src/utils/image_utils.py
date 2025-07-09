@@ -13,39 +13,60 @@ from typing import Tuple, Optional, Union
 import cv2
 
 class ImageUtils:
-    """图像处理工具类"""
-    
+    """图像处理工具类
+
+    提供图像格式转换、处理和验证等功能。
+    """
+
     @staticmethod
     def numpy_to_pil(array: np.ndarray) -> Image.Image:
-        """
-        将numpy数组转换为PIL图像
-        
+        """将numpy数组转换为PIL图像
+
         Args:
-            array: numpy数组
-            
+            array: numpy数组，支持2D(灰度)或3D(RGB/RGBA)
+
         Returns:
-            PIL图像
+            PIL图像对象
+
+        Raises:
+            ValueError: 不支持的数组形状或数据类型
         """
-        # 确保数组在正确的范围内
-        if array.dtype == np.float32 or array.dtype == np.float64:
-            if array.max() <= 1.0:
-                array = (array * 255).astype(np.uint8)
-            else:
-                array = array.astype(np.uint8)
-        
-        # 处理不同的数组形状
+        if array is None or array.size == 0:
+            raise ValueError("输入数组为空")
+
+        # 标准化数据类型和范围
+        array = ImageUtils._normalize_array(array)
+
+        # 根据形状确定图像模式
         if len(array.shape) == 2:
-            # 灰度图
             return Image.fromarray(array, mode='L')
         elif len(array.shape) == 3:
-            if array.shape[2] == 3:
-                # RGB图
+            channels = array.shape[2]
+            if channels == 3:
                 return Image.fromarray(array, mode='RGB')
-            elif array.shape[2] == 4:
-                # RGBA图
+            elif channels == 4:
                 return Image.fromarray(array, mode='RGBA')
-        
-        raise ValueError(f"不支持的数组形状: {array.shape}")
+            else:
+                raise ValueError(f"不支持的通道数: {channels}")
+        else:
+            raise ValueError(f"不支持的数组形状: {array.shape}")
+
+    @staticmethod
+    def _normalize_array(array: np.ndarray) -> np.ndarray:
+        """标准化数组到uint8格式"""
+        if array.dtype in (np.float32, np.float64):
+            # 浮点数组，检查范围并转换
+            if array.max() <= 1.0 and array.min() >= 0.0:
+                return (array * 255).astype(np.uint8)
+            else:
+                # 超出[0,1]范围，进行裁剪
+                array = np.clip(array, 0, 1)
+                return (array * 255).astype(np.uint8)
+        elif array.dtype == np.uint8:
+            return array
+        else:
+            # 其他整数类型，直接转换
+            return array.astype(np.uint8)
     
     @staticmethod
     def pil_to_numpy(image: Image.Image, normalize: bool = True) -> np.ndarray:

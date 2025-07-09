@@ -7,10 +7,11 @@
 包含:
 - SDF生成器 (SDFGenerator)
 - 图像管理器 (ImageManager)
-- 数学工具 (MathUtils)
+- 配置管理器 (ConfigManager)
 """
 
 from .sdf_generator import SDFGenerator
 from .image_manager import ImageManager
+from .config_manager import ConfigManager, config
 
-__all__ = ['SDFGenerator', 'ImageManager']
+__all__ = ['SDFGenerator', 'ImageManager', 'ConfigManager', 'config']

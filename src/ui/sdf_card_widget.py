@@ -30,7 +30,7 @@ class SDFCardWidget(QFrame):
         self.generation_time = 0.0
         self.status = "waiting"  # waiting, generating, completed, failed
         
-        self.setFixedSize(120, 140)  # 卡片固定大小
+        self.setFixedSize(110, 120)  # 缩小卡片尺寸避免重叠
         self.setFrameStyle(QFrame.Box)
         self.setLineWidth(1)
         self.setStyleSheet("""
@@ -49,9 +49,9 @@ class SDFCardWidget(QFrame):
         layout.setContentsMargins(5, 5, 5, 5)
         layout.setSpacing(5)
         
-        # SDF预览区域 (100x100)
+        # SDF预览区域 (80x80)
         self.sdf_preview_label = QLabel()
-        self.sdf_preview_label.setFixedSize(100, 100)
+        self.sdf_preview_label.setFixedSize(80, 80)
         self.sdf_preview_label.setAlignment(Qt.AlignCenter)
         self.sdf_preview_label.setStyleSheet("""
             QLabel {
@@ -165,9 +165,9 @@ class SDFCardsContainer(QWidget):
     def _init_ui(self):
         """初始化UI"""
         self.layout = QHBoxLayout(self)
-        self.layout.setContentsMargins(0, 0, 0, 0)
-        self.layout.setSpacing(10)
-        self.layout.addStretch()  # 左对齐
+        self.layout.setContentsMargins(5, 5, 5, 5)
+        #self.layout.setSpacing(10)  # 增加间距避免重叠
+        self.layout.setAlignment(Qt.AlignLeft | Qt.AlignTop)  # 左对齐并顶部对齐
     
     def add_sdf_card(self, image_path: str) -> SDFCardWidget:
         """添加SDF卡片"""

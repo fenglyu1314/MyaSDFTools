@@ -40,17 +40,90 @@ from ..core.sdf_generator import SDFGenerator
 from ..core.image_manager import ImageManager
 from ..utils.image_utils import ImageUtils
 
+class ThemeStyles:
+    """统一的主题样式系统"""
+
+    @staticmethod
+    def get_theme_colors():
+        """获取主题颜色"""
+        is_dark_theme = ThemeStyles._detect_dark_theme()
+
+        return ThemeStyles._get_color_scheme(is_dark_theme)
+
+    @staticmethod
+    def _detect_dark_theme() -> bool:
+        """检测是否为深色主题"""
+        try:
+            from PySide6.QtWidgets import QApplication
+            from PySide6.QtGui import QPalette
+
+            app = QApplication.instance()
+            if not app:
+                return False
+
+            # 尝试使用新的ColorScheme API
+            style_hints = app.styleHints()
+            if hasattr(style_hints, 'colorScheme') and hasattr(style_hints, 'ColorScheme'):
+                color_scheme = style_hints.colorScheme()
+                return color_scheme == style_hints.ColorScheme.Dark
+
+            # 回退到调色板检测
+            palette = app.palette()
+            window_color = palette.color(QPalette.Window)
+            return window_color.lightness() < 128
+
+        except Exception:
+            return False  # 默认浅色主题
+
+    @staticmethod
+    def _get_color_scheme(is_dark: bool) -> dict:
+
+        """获取颜色方案"""
+        if is_dark:
+            return {
+                'bg_primary': '#2b2b2b',
+                'bg_secondary': '#3c3c3c',
+                'bg_tertiary': '#4a4a4a',
+                'text_primary': '#ffffff',
+                'text_secondary': '#cccccc',
+                'text_disabled': '#888888',
+                'border': '#555555',
+                'accent': '#2196F3',
+                'accent_hover': '#1976D2',
+                'accent_pressed': '#1565C0',
+                'success': '#4CAF50',
+                'warning': '#FF9800',
+                'error': '#F44336'
+            }
+        else:
+            return {
+                'bg_primary': '#ffffff',
+                'bg_secondary': '#f5f5f5',
+                'bg_tertiary': '#eeeeee',
+                'text_primary': '#333333',
+                'text_secondary': '#666666',
+                'text_disabled': '#999999',
+                'border': '#cccccc',
+                'accent': '#2196F3',
+                'accent_hover': '#1976D2',
+                'accent_pressed': '#1565C0',
+                'success': '#4CAF50',
+                'warning': '#FF9800',
+                'error': '#F44336'
+            }
+
 class ButtonStyles:
     """统一的按钮样式"""
 
     @staticmethod
     def primary_button(size="normal"):
         """主要按钮样式"""
+        colors = ThemeStyles.get_theme_colors()
         height = "36px" if size == "normal" else "32px" if size == "small" else "28px"
         font_size = "14px" if size == "normal" else "13px" if size == "small" else "12px"
         return f"""
             QPushButton {{
-                background-color: #2196F3;
+                background-color: {colors['accent']};
                 color: white;
                 border: none;
                 border-radius: 4px;
@@ -60,25 +133,26 @@ class ButtonStyles:
                 padding: 0px 12px;
             }}
             QPushButton:hover:enabled {{
-                background-color: #1976D2;
+                background-color: {colors['accent_hover']};
             }}
             QPushButton:pressed:enabled {{
-                background-color: #1565C0;
+                background-color: {colors['accent_pressed']};
             }}
             QPushButton:disabled {{
-                background-color: #CCCCCC;
-                color: #666666;
+                background-color: {colors['bg_tertiary']};
+                color: {colors['text_disabled']};
             }}
         """
 
     @staticmethod
     def success_button(size="normal"):
         """成功按钮样式"""
+        colors = ThemeStyles.get_theme_colors()
         height = "36px" if size == "normal" else "32px" if size == "small" else "28px"
         font_size = "14px" if size == "normal" else "13px" if size == "small" else "12px"
         return f"""
             QPushButton {{
-                background-color: #4CAF50;
+                background-color: {colors['success']};
                 color: white;
                 border: none;
                 border-radius: 4px;
@@ -153,7 +227,9 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("SDF工具 - 二次元脸部SDF生成")
-        self.setFixedSize(1400, 900)  # 固定窗口大小
+        # 设置固定窗口大小，根据各区域实际需求计算
+        # 左侧：1000px（区域1+2+4&5横向+按钮），右侧：300px（区域3参数控制），边距和间距：18px
+        self.setFixedSize(1318, 775)  # 1000(左侧)+300(右侧)+18(边距和间距) = 1318px，高度保持775px
         
         # 初始化变量
         self.current_images: List[str] = []
@@ -177,7 +253,6 @@ class MainWindow(QMainWindow):
         
         # 初始化UI
         self._init_ui()
-        self._init_menu_bar()
         self._init_status_bar()
         self._connect_signals()
         
@@ -194,201 +269,219 @@ class MainWindow(QMainWindow):
             self.setWindowIcon(QIcon(str(icon_path)))
     
     def _init_ui(self):
-        """初始化用户界面 - 新四区域布局"""
+        """初始化用户界面 - 简化布局，消除多余容器嵌套"""
         # 创建中央部件
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
 
-        # 创建主布局 - 垂直布局
-        main_layout = QVBoxLayout(central_widget)
-        main_layout.setContentsMargins(10, 10, 10, 10)
-        main_layout.setSpacing(10)
+        # 创建主布局 - 水平分割，直接添加区域
+        main_layout = QHBoxLayout(central_widget)
+        main_layout.setContentsMargins(5, 5, 5, 5)  # 减小边距
+        main_layout.setSpacing(8)  # 减小间距
 
-        # 区域1: 图像导入与角度配置区域 (高度200px)
+        # 左侧垂直布局 - 直接添加区域，无多余容器
+        left_layout = QVBoxLayout()
+
+        # 区域1: 图像导入区域
         image_import_area = self._create_image_import_area()
-        image_import_area.setFixedHeight(200)
-        main_layout.addWidget(image_import_area)
+        image_import_area.setFixedSize(1000, 210)  # 宽度1000px，适合10个100px图像卡片
+        left_layout.addWidget(image_import_area)
 
-        # 区域2: 单张SDF生成结果区域 (高度150px)
+        # 区域2: SDF结果区域
         sdf_results_area = self._create_sdf_results_area()
-        sdf_results_area.setFixedHeight(150)
-        main_layout.addWidget(sdf_results_area)
+        sdf_results_area.setFixedSize(1000, 160)  # 宽度1000px，与区域1保持一致
+        left_layout.addWidget(sdf_results_area)
 
-        # 区域3+4: 预览区域 - 水平分割 (剩余高度400px)
-        preview_layout = QHBoxLayout()
-        preview_layout.setSpacing(10)
+        # 区域4和5: 合并SDF预览和光照效果预览区域 - 横向并排
+        preview_areas_layout = QHBoxLayout()
+        preview_areas_layout.setSpacing(8)
 
-        # 区域3: 合并SDF预览区域 (宽度680px)
+        # 区域4: 合并SDF预览区域
         merged_sdf_area = self._create_merged_sdf_area()
-        merged_sdf_area.setFixedWidth(680)
-        preview_layout.addWidget(merged_sdf_area)
+        merged_sdf_area.setFixedSize(490, 350)  # 调整宽度适应横向布局
+        preview_areas_layout.addWidget(merged_sdf_area)
 
-        # 区域4: 光照效果预览区域 (宽度680px)
+        # 区域5: 光照效果预览区域
         lighting_preview_area = self._create_lighting_preview_area()
-        lighting_preview_area.setFixedWidth(680)
-        preview_layout.addWidget(lighting_preview_area)
+        lighting_preview_area.setFixedSize(490, 350)  # 调整宽度适应横向布局，高度与区域4保持一致
+        preview_areas_layout.addWidget(lighting_preview_area)
 
-        main_layout.addLayout(preview_layout)
+        left_layout.addLayout(preview_areas_layout)
+
+        # 右侧垂直布局 - 区域3参数控制 + 操作按钮
+        right_layout = QVBoxLayout()
+
+        # 区域3: 参数控制区域 - 移到右侧，竖向放置
+        parameter_area = self._create_parameter_area()
+        parameter_area.setFixedSize(300, 580)  # 调整高度为按钮区域留出更多空间
+        right_layout.addWidget(parameter_area)
+
+        # 操作按钮区域 - 移到右侧
+        button_area = self._create_button_area()
+        button_area.setFixedSize(300, 140)  # 增加高度：3个按钮(35*3=105) + 间距(8*2=16) + 边距(10*2=20) = 141px
+        right_layout.addWidget(button_area)
+
+        # 直接添加布局到主布局，无多余容器包装
+        main_layout.addLayout(left_layout)
+        main_layout.addLayout(right_layout)
 
     def _create_image_import_area(self) -> QWidget:
-        """创建图像导入与角度配置区域"""
-        area = QGroupBox("1. 图像导入与角度配置")
+        """创建图像导入区域 - 固定尺寸布局"""
+        area = QGroupBox("1. 图像导入")
         layout = QVBoxLayout(area)
-        layout.setContentsMargins(10, 15, 10, 10)
-        layout.setSpacing(10)
+        layout.setContentsMargins(4, 4, 4, 4)  # 适当的边距
 
-        # 上半部分：图像卡片和操作按钮
-        top_layout = QHBoxLayout()
-
-        # 图像卡片容器
+        # 图像卡片容器 - 固定高度确保卡片完整显示
         self.image_cards_container = ImageCardsContainer()
-        top_layout.addWidget(self.image_cards_container)
+        self.image_cards_container.setFixedHeight(200)  # 调整高度适应新的区域尺寸
+        layout.addWidget(self.image_cards_container)
 
-        # 操作按钮区域
-        button_layout = QVBoxLayout()
-        button_layout.setSpacing(5)
-
-        self.import_btn = QPushButton("导入图像")
-        self.import_btn.setStyleSheet(ButtonStyles.success_button("normal"))
-        button_layout.addWidget(self.import_btn)
-
-        self.generate_btn = QPushButton("生成SDF")
-        self.generate_btn.setEnabled(False)
-        self.generate_btn.setStyleSheet(ButtonStyles.primary_button("normal"))
-        button_layout.addWidget(self.generate_btn)
-
-        button_layout.addStretch()
-        top_layout.addLayout(button_layout)
-
-        layout.addLayout(top_layout)
-
-        # 下半部分：进度条
+        # 进度条 - 固定位置，避免重叠
         self.progress_bar = QProgressBar()
+        self.progress_bar.setTextVisible(False)
         self.progress_bar.setVisible(False)
-        self.progress_bar.setFixedHeight(20)
+        self.progress_bar.setFixedHeight(10)  # 稍微增加高度
         layout.addWidget(self.progress_bar)
 
         return area
 
     def _create_sdf_results_area(self) -> QWidget:
-        """创建单张SDF生成结果区域"""
-        area = QGroupBox("2. 单张SDF生成结果")
+        """创建SDF生成结果区域 - 固定尺寸布局"""
+        area = QGroupBox("2. SDF生成结果")
         layout = QVBoxLayout(area)
-        layout.setContentsMargins(10, 15, 10, 10)
+        layout.setContentsMargins(4, 4, 4, 4)  # 适当的边距
+        # layout.setSpacing(10)
 
-        # SDF结果卡片容器
+        # SDF结果卡片容器 - 固定高度确保卡片完整显示
         self.sdf_cards_container = SDFCardsContainer()
+        self.sdf_cards_container.setFixedHeight(160)  # 调整高度适应新的区域尺寸
         layout.addWidget(self.sdf_cards_container)
 
         return area
 
-    def _create_merged_sdf_area(self) -> QWidget:
-        """创建合并SDF预览区域"""
-        area = QGroupBox("3. 合并SDF预览")
+    def _create_parameter_area(self) -> QWidget:
+        """创建参数控制区域 - 仅包含参数，不包含按钮"""
+        area = QGroupBox("3. SDF参数控制")
         layout = QVBoxLayout(area)
-        layout.setContentsMargins(10, 15, 10, 10)
-        layout.setSpacing(10)
+        layout.setContentsMargins(4, 4, 4, 4)  # 减小边距
+        # layout.setSpacing(5)  # 减小间距
 
-        # 预览图像区域 (660px × 350px) - 使用可缩放组件
+        # 参数控制组件 - 直接添加
+        self.parameter_widget = ParameterWidget()
+        layout.addWidget(self.parameter_widget)
+
+        return area
+
+    def _create_button_area(self) -> QWidget:
+        """创建操作按钮区域 - 适应右侧垂直布局，防止重叠"""
+        area = QWidget()  # 不使用QGroupBox，减少边距
+        layout = QVBoxLayout(area)  # 改为垂直布局适应右侧
+        layout.setContentsMargins(10, 10, 10, 10)  # 左右上下边距各10px
+        layout.setSpacing(8)  # 按钮间距8px
+
+        # 按钮宽度计算：容器宽度300 - 左右边距20 = 280px
+        button_width = 280
+        button_height = 35
+
+        self.import_btn = QPushButton("导入图像")
+        self.import_btn.setStyleSheet(ButtonStyles.success_button("normal"))
+        self.import_btn.setFixedSize(button_width, button_height)
+        layout.addWidget(self.import_btn)
+
+        self.generate_btn = QPushButton("生成SDF")
+        self.generate_btn.setEnabled(False)
+        self.generate_btn.setStyleSheet(ButtonStyles.primary_button("normal"))
+        self.generate_btn.setFixedSize(button_width, button_height)
+        layout.addWidget(self.generate_btn)
+
+        self.export_btn = QPushButton("导出")
+        self.export_btn.setEnabled(False)
+        self.export_btn.setStyleSheet(ButtonStyles.secondary_button("normal"))
+        self.export_btn.setFixedSize(button_width, button_height)
+        layout.addWidget(self.export_btn)
+
+        return area
+
+    def _create_merged_sdf_area(self) -> QWidget:
+        """创建合并SDF预览区域 - 最小边距布局"""
+        area = QGroupBox("4. 合并SDF预览")
+        layout = QVBoxLayout(area)
+
+        # 预览图像区域 - 使用可缩放组件，精确计算尺寸
         self.merged_sdf_preview = ZoomableImageWidget()
-        self.merged_sdf_preview.setFixedSize(660, 350)
+        self.merged_sdf_preview.setFixedSize(470, 280)  # 调整为横向布局适合的尺寸
         self.merged_sdf_preview.zoom_changed.connect(self._on_merged_sdf_zoom_changed)
         layout.addWidget(self.merged_sdf_preview)
 
-        # 控制区域
+        # 控制区域 - 紧凑布局
         control_layout = QHBoxLayout()
 
         # 缩放控制
         control_layout.addWidget(QLabel("缩放:"))
-
+        
         self.fit_btn = QPushButton("适应")
         self.fit_btn.setStyleSheet(ButtonStyles.secondary_button("tiny"))
+        self.fit_btn.setFixedSize(50, 25)
         control_layout.addWidget(self.fit_btn)
-
+        
         self.actual_btn = QPushButton("1:1")
         self.actual_btn.setStyleSheet(ButtonStyles.secondary_button("tiny"))
+        self.actual_btn.setFixedSize(40, 25)
         control_layout.addWidget(self.actual_btn)
-
+        
         self.reset_btn = QPushButton("重置")
         self.reset_btn.setStyleSheet(ButtonStyles.secondary_button("tiny"))
+        self.reset_btn.setFixedSize(50, 25)
         control_layout.addWidget(self.reset_btn)
-
+        
         self.zoom_label = QLabel("100%")
+        self.zoom_label.setFixedWidth(50)
         control_layout.addWidget(self.zoom_label)
-
-        control_layout.addSpacing(20)
-
-        # 混合模式
-        control_layout.addWidget(QLabel("混合模式:"))
-        self.blend_mode_combo = QComboBox()
-        self.blend_mode_combo.addItems(["智能权重", "简单平均", "最大值", "最小值"])
-        control_layout.addWidget(self.blend_mode_combo)
-
+        
         control_layout.addStretch()
         layout.addLayout(control_layout)
 
         return area
 
     def _create_lighting_preview_area(self) -> QWidget:
-        """创建光照效果预览区域"""
-        area = QGroupBox("4. 光照效果预览")
+        """创建光照效果预览区域 - 最小边距布局"""
+        area = QGroupBox("5. 光照效果预览")
         layout = QVBoxLayout(area)
-        layout.setContentsMargins(10, 15, 10, 10)
-        layout.setSpacing(10)
+        #layout.setContentsMargins(8, 12, 8, 8)  # 最小边距
+        #layout.setSpacing(4)  # 最小间距
 
-        # 预览图像区域 (660px × 300px) - 固定显示
+        # 预览图像区域 - 固定显示，精确计算尺寸
         self.lighting_preview = QLabel("光照效果预览\n\n生成SDF后将在此显示")
-        self.lighting_preview.setFixedSize(660, 300)
+        self.lighting_preview.setFixedSize(470, 280)  # 调整为与区域4保持一致的尺寸
         self.lighting_preview.setAlignment(Qt.AlignCenter)
-        self.lighting_preview.setStyleSheet("""
-            QLabel {
-                border: 1px solid #CCCCCC;
-                background-color: #F5F5F5;
-                color: #999999;
+
+        # 应用主题样式
+        colors = ThemeStyles.get_theme_colors()
+        self.lighting_preview.setStyleSheet(f"""
+            QLabel {{
+                border: 1px solid {colors['border']};
+                background-color: {colors['bg_secondary']};
+                color: {colors['text_disabled']};
                 font-size: 14px;
-            }
+            }}
         """)
         layout.addWidget(self.lighting_preview)
 
-        # 光照控制区域
-        control_layout = QVBoxLayout()
+        # 光照控制区域 - 简化为只保留光照角度
+        control_layout = QHBoxLayout()
+        control_layout.setContentsMargins(10, 5, 10, 5)
         control_layout.setSpacing(8)
 
-        # 光照角度
-        angle_layout = QHBoxLayout()
-        angle_layout.addWidget(QLabel("光照角度:"))
+        # 光照角度 - 范围-180到180
+        control_layout.addWidget(QLabel("光照角度:"))
         self.angle_slider = QSlider(Qt.Horizontal)
-        self.angle_slider.setRange(0, 360)
-        self.angle_slider.setValue(45)
-        angle_layout.addWidget(self.angle_slider)
-        self.angle_value_label = QLabel("45°")
-        self.angle_value_label.setMinimumWidth(40)
-        angle_layout.addWidget(self.angle_value_label)
-        control_layout.addLayout(angle_layout)
-
-        # 光照强度
-        intensity_layout = QHBoxLayout()
-        intensity_layout.addWidget(QLabel("光照强度:"))
-        self.intensity_slider = QSlider(Qt.Horizontal)
-        self.intensity_slider.setRange(0, 200)
-        self.intensity_slider.setValue(100)
-        intensity_layout.addWidget(self.intensity_slider)
-        self.intensity_value_label = QLabel("1.0")
-        self.intensity_value_label.setMinimumWidth(40)
-        intensity_layout.addWidget(self.intensity_value_label)
-        control_layout.addLayout(intensity_layout)
-
-        # 环境光
-        ambient_layout = QHBoxLayout()
-        ambient_layout.addWidget(QLabel("环境光:"))
-        self.ambient_slider = QSlider(Qt.Horizontal)
-        self.ambient_slider.setRange(0, 100)
-        self.ambient_slider.setValue(30)
-        ambient_layout.addWidget(self.ambient_slider)
-        self.ambient_value_label = QLabel("0.3")
-        self.ambient_value_label.setMinimumWidth(40)
-        ambient_layout.addWidget(self.ambient_value_label)
-        control_layout.addLayout(ambient_layout)
+        self.angle_slider.setRange(-180, 180)
+        self.angle_slider.setValue(0)  # 默认0度
+        self.angle_slider.setFixedHeight(25)
+        control_layout.addWidget(self.angle_slider)
+        self.angle_value_label = QLabel("0°")
+        self.angle_value_label.setFixedWidth(50)  # 增加宽度以显示负数
+        control_layout.addWidget(self.angle_value_label)
 
         layout.addLayout(control_layout)
 
@@ -462,7 +555,7 @@ class MainWindow(QMainWindow):
     def _create_parameter_panel(self) -> QWidget:
         """创建右侧参数控制面板"""
         panel = QWidget()
-        panel.setMaximumWidth(280)  # 限制最大宽度
+        # panel.setMaximumWidth(280)  # 限制最大宽度
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(3, 3, 3, 3)
         layout.setSpacing(5)
@@ -582,11 +675,7 @@ class MainWindow(QMainWindow):
         self.image_count_label = QLabel("图像: 0")
         self.status_bar.addPermanentWidget(self.image_count_label)
 
-        # 导出按钮
-        self.export_btn = QPushButton("导出结果")
-        self.export_btn.setEnabled(False)
-        self.export_btn.setStyleSheet(ButtonStyles.warning_button("small"))
-        self.status_bar.addPermanentWidget(self.export_btn)
+
 
     def _connect_signals(self):
         """连接信号和槽"""
@@ -605,15 +694,15 @@ class MainWindow(QMainWindow):
 
         # 光照控制滑竿
         self.angle_slider.valueChanged.connect(self._on_angle_changed)
-        self.intensity_slider.valueChanged.connect(self._on_intensity_changed)
-        self.ambient_slider.valueChanged.connect(self._on_ambient_changed)
 
-        # 混合模式
-        self.blend_mode_combo.currentTextChanged.connect(self._on_blend_mode_changed)
+        # 混合模式信号连接已移除（现在由参数控制区域统一管理）
 
         # 图像卡片容器信号
         self.image_cards_container.images_changed.connect(self._on_images_changed)
         self.image_cards_container.angle_changed.connect(self._on_angle_changed_card)
+
+        # 参数组件信号
+        self.parameter_widget.parameters_changed.connect(self._on_parameters_changed)
 
     def _show_welcome_message(self):
         """显示欢迎信息"""
@@ -624,17 +713,7 @@ class MainWindow(QMainWindow):
         self.angle_value_label.setText(f"{value}°")
         self._update_lighting_preview()
 
-    def _on_intensity_changed(self, value):
-        """光照强度改变"""
-        intensity = value / 100.0
-        self.intensity_value_label.setText(f"{intensity:.1f}")
-        self._update_lighting_preview()
-
-    def _on_ambient_changed(self, value):
-        """环境光改变"""
-        ambient = value / 100.0
-        self.ambient_value_label.setText(f"{ambient:.1f}")
-        self._update_lighting_preview()
+    # 光照强度和环境光方法已移除，现在使用固定值
 
     def _update_lighting_preview(self):
         """更新光照效果预览"""
@@ -645,8 +724,8 @@ class MainWindow(QMainWindow):
         try:
             # 获取光照参数
             angle = self.angle_slider.value()
-            intensity = self.intensity_slider.value() / 100.0
-            ambient = self.ambient_slider.value() / 100.0
+            intensity = 1.0  # 固定光照强度
+            ambient = 0.3   # 固定环境光
 
             # 生成光照效果
             lighting_result = self._apply_lighting_effect(
@@ -660,14 +739,17 @@ class MainWindow(QMainWindow):
                 # 转换为QPixmap并显示
                 lighting_pixmap = self._numpy_to_pixmap(lighting_result)
                 if not lighting_pixmap.isNull():
-                    # 缩放到预览区域大小
+                    # 缩放到预览区域大小，保持宽高比并居中显示
                     scaled_pixmap = lighting_pixmap.scaled(
-                        660, 300,
+                        self.lighting_preview.width(),
+                        self.lighting_preview.height(),
                         Qt.KeepAspectRatio,
                         Qt.SmoothTransformation
                     )
                     self.lighting_preview.setPixmap(scaled_pixmap)
                     self.lighting_preview.setText("")  # 清除文本
+                    # 确保图像居中显示
+                    self.lighting_preview.setAlignment(Qt.AlignCenter)
                 else:
                     self.lighting_preview.setText("光照效果\n生成失败")
 
@@ -676,17 +758,16 @@ class MainWindow(QMainWindow):
             self.lighting_preview.setText("光照效果\n预览错误")
 
     def _apply_lighting_effect(self, sdf_data, angle_deg, intensity, ambient):
-        """应用光照效果到SDF数据"""
+        """
+        应用光照效果到SDF数据
+
+        角度范围：-180到180度
+        - 0到-180度：SDF左右镜像反转后映射到0-1，与角度映射值比较
+        - 0到180度：SDF正常映射到0-1，与角度映射值比较
+        - 比较规则：SDF值 > 角度映射值 → 白色，否则 → 黑色
+        """
         try:
             import numpy as np
-            import math
-
-            # 将角度转换为弧度
-            angle_rad = math.radians(angle_deg)
-
-            # 计算光照方向向量
-            light_dir_x = math.cos(angle_rad)
-            light_dir_y = math.sin(angle_rad)
 
             # 确保SDF数据是numpy数组
             if not isinstance(sdf_data, np.ndarray):
@@ -697,21 +778,23 @@ class MainWindow(QMainWindow):
             if sdf_normalized.max() > 1.0:
                 sdf_normalized = sdf_normalized / 255.0
 
-            # 计算梯度 (简化的法线计算)
-            grad_x = np.gradient(sdf_normalized, axis=1)
-            grad_y = np.gradient(sdf_normalized, axis=0)
+            # 根据角度范围处理SDF数据
+            if angle_deg <= 0:  # 0到-180度范围
+                # SDF左右镜像反转
+                sdf_processed = np.fliplr(sdf_normalized)
+                # 角度映射：-180到0 映射到 0到1
+                angle_mapped = 1 - ((angle_deg + 180) / 180.0)
+            else:  # 0到180度范围
+                # SDF正常使用
+                sdf_processed = sdf_normalized
+                # 角度映射：0到180 映射到 0到1
+                angle_mapped = angle_deg / 180.0
 
-            # 计算光照强度
-            # 使用梯度作为法线，计算与光照方向的点积
-            lighting = (grad_x * light_dir_x + grad_y * light_dir_y) * intensity
+            # 比较SDF值与角度映射值
+            # SDF值 > 角度映射值 → 白色(1)，否则 → 黑色(0)
+            result = (sdf_processed > angle_mapped).astype(np.float32)
 
-            # 添加环境光
-            lighting = np.clip(lighting + ambient, 0, 1)
-
-            # 应用到原始SDF
-            result = sdf_normalized * lighting
-
-            # 转换回0-255范围
+            # 转换回0-255范围用于显示
             result = (result * 255).astype(np.uint8)
 
             return result
@@ -720,15 +803,16 @@ class MainWindow(QMainWindow):
             print(f"应用光照效果失败: {e}")
             return None
 
-    def _on_blend_mode_changed(self, mode):
-        """混合模式改变"""
-        # TODO: 重新计算合并SDF
-        pass
+
 
     def _on_angle_changed_card(self, image_path, angle):
         """图像卡片角度改变"""
-        print(f"图像 {Path(image_path).name} 角度改变为 {angle}°")
-        # TODO: 如果已生成SDF，重新计算合并结果
+        print(f"图像 {Path(image_path).name} 角度改变为 {angle}°，需要重新生成SDF")
+
+    def _on_parameters_changed(self):
+        """参数变化时的处理"""
+        # 参数变化时只记录，不自动重新生成
+        print("SDF参数已更改，需要重新生成SDF")
 
     def _on_images_changed(self):
         """图像列表变化时的处理"""
@@ -739,6 +823,8 @@ class MainWindow(QMainWindow):
         # 同步更新SDF卡片
         images_data = self.image_cards_container.get_images_data()
         self.sdf_cards_container.update_cards_from_images(images_data)
+
+        # 参数组件不需要图像数量信息（已简化）
 
         if count == 0:
             self.status_label.setText("请导入图像开始使用")
@@ -867,12 +953,16 @@ class MainWindow(QMainWindow):
                 # 生成SDF
                 start_time = time.time()
 
-                # 获取基础参数 (暂时使用默认值)
+                # 获取参数组件的参数
+                params = self.parameter_widget.get_sdf_params()
                 sdf_result, computation_time = self.sdf_generator.compute_single_sdf(
                     image_path,
-                    threshold=0.5,
-                    normalize=True,
-                    invert=False
+                    threshold=params.get('threshold', 0.5),
+                    normalize=params.get('normalize', True),
+                    invert=params.get('invert', False),
+                    sdf_direction=params.get('sdf_direction', 'both'),
+                    max_distance=params.get('max_distance', 100),
+                    num_threads=params.get('num_threads')
                 )
 
                 # 更新SDF卡片
@@ -915,6 +1005,7 @@ class MainWindow(QMainWindow):
 
                 # 存储为当前合并SDF并更新光照预览
                 self.current_merged_sdf = sdf_result
+                self.sdf_result = sdf_result  # 同时更新导出用的变量
                 self._update_lighting_preview()
         else:
             # 多张图像，需要合并
@@ -926,22 +1017,22 @@ class MainWindow(QMainWindow):
                 angles = [data[1] for data in images_data]
 
                 # 获取混合模式
-                blend_mode = self.blend_mode_combo.currentText()
-                blend_mode_map = {
-                    "智能权重": "weighted",
-                    "简单平均": "average",
-                    "最大值": "max",
-                    "最小值": "min"
-                }
-                blend_mode = blend_mode_map.get(blend_mode, "weighted")
+                blend_mode = self.parameter_widget.get_blend_mode()
+
+                # 获取参数组件的参数
+                params = self.parameter_widget.get_sdf_params()
 
                 # 生成合并SDF
                 merged_sdf, computation_time = self.sdf_generator.compute_multi_sdf(
                     image_paths,
                     angles=angles,
-                    threshold=0.5,
-                    normalize=True,
-                    blend_mode=blend_mode
+                    threshold=params.get('threshold', 0.5),
+                    normalize=params.get('normalize', True),
+                    invert=params.get('invert', False),
+                    blend_mode=blend_mode,
+                    sdf_direction=params.get('sdf_direction', 'both'),
+                    max_distance=params.get('max_distance', 100),
+                    num_threads=params.get('num_threads')
                 )
 
                 # 显示合并结果
@@ -951,6 +1042,7 @@ class MainWindow(QMainWindow):
 
                     # 存储合并结果
                     self.current_merged_sdf = merged_sdf
+                    self.sdf_result = merged_sdf  # 同时更新导出用的变量
 
                     # 更新光照预览
                     self._update_lighting_preview()
@@ -1019,7 +1111,10 @@ class MainWindow(QMainWindow):
                 image_path,
                 threshold=params.get('threshold', 0.5),
                 normalize=params.get('normalize', True),
-                invert=params.get('invert', False)
+                invert=params.get('invert', False),
+                sdf_direction=params.get('sdf_direction', 'both'),
+                max_distance=params.get('max_distance', 100),
+                num_threads=params.get('num_threads')
             )
             self._on_sdf_generated(sdf_result, computation_time)
         except Exception as e:
@@ -1033,7 +1128,10 @@ class MainWindow(QMainWindow):
                 angles=params.get('angles'),
                 threshold=params.get('threshold', 0.5),
                 normalize=params.get('normalize', True),
-                blend_mode=params.get('blend_mode', 'weighted')
+                blend_mode=params.get('blend_mode', 'weighted'),
+                sdf_direction=params.get('sdf_direction', 'both'),
+                max_distance=params.get('max_distance', 100),
+                num_threads=params.get('num_threads')
             )
             self._on_sdf_generated(sdf_result, computation_time)
         except Exception as e:
@@ -1133,13 +1231,14 @@ class MainWindow(QMainWindow):
     def _clear_images(self):
         """清空所有图像"""
         self.current_images.clear()
-        self.image_list.clear()
+        # self.image_list.clear()  # 这个属性不存在，注释掉
         self.image_manager.clear_all()
         self.sdf_result = None
-        self.preview_widget.clear()
+        self.current_merged_sdf = None  # 同时清空合并SDF
+        # self.preview_widget.clear()  # 这个属性不存在，注释掉
         self._update_ui_state()
         self.status_label.setText("已清空所有图像")
-        self.time_label.setText("")
+        # self.time_label.setText("")  # 这个属性不存在，注释掉
 
     def _reset_view(self):
         """重置预览视图"""
@@ -1170,16 +1269,9 @@ class MainWindow(QMainWindow):
                          "作者: Mya\n"
                          "技术栈: Python + PySide6 + C++")
 
-    def _on_images_changed(self):
-        """图像列表变化时的处理"""
-        # 更新角度配置
-        self.parameter_widget.set_image_count(len(self.current_images))
-        self._update_ui_state()
 
-    def _on_parameters_changed(self):
-        """参数变化时的处理"""
-        # 如果已有SDF结果，可以考虑实时更新预览
-        pass
+
+
 
     def _update_ui_state(self):
         """更新UI状态"""
@@ -1249,8 +1341,7 @@ class MainWindow(QMainWindow):
             self.current_images = sorted(image_files)  # 按文件名排序
             self.image_list.set_images(self.current_images)
 
-            # 更新角度配置
-            self.parameter_widget.set_image_count(len(self.current_images))
+            # 角度配置已简化，不需要更新
 
             self.status_label.setText(f"批量导入完成：{len(image_files)} 个图像文件")
             print(f"📁 批量导入完成: {len(image_files)} 个图像文件")
@@ -1319,7 +1410,10 @@ class MainWindow(QMainWindow):
                     image_path,
                     threshold=params.get('threshold', 0.5),
                     normalize=params.get('normalize', True),
-                    invert=params.get('invert', False)
+                    invert=params.get('invert', False),
+                    sdf_direction=params.get('sdf_direction', 'both'),
+                    max_distance=params.get('max_distance', 100),
+                    num_threads=params.get('num_threads')
                 )
 
                 # 保存结果
@@ -1363,7 +1457,10 @@ class MainWindow(QMainWindow):
                 angles=params.get('angles'),
                 threshold=params.get('threshold', 0.5),
                 normalize=params.get('normalize', True),
-                blend_mode=params.get('blend_mode', 'weighted')
+                blend_mode=params.get('blend_mode', 'weighted'),
+                sdf_direction=params.get('sdf_direction', 'both'),
+                max_distance=params.get('max_distance', 100),
+                num_threads=params.get('num_threads')
             )
 
             # 保存结果

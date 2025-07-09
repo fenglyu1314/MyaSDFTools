@@ -19,35 +19,50 @@ from PIL import Image
 import cv2
 
 class SDFGenerator:
-    """SDF生成器类"""
-    
+    """SDF生成器类
+
+    负责计算单张或多张图像的有向距离场(SDF)，
+    支持C++后端加速和多种混合模式。
+    """
+
     def __init__(self):
+        """初始化SDF生成器"""
         self.last_computation_time = 0.0
         self.use_cpp_backend = False
-        
-        # 尝试导入C++后端
+        self.cpp_backend = None
+
+        self._init_cpp_backend()
+
+    def _init_cpp_backend(self):
+        """初始化C++后端"""
         try:
             import sdf_core
             self.cpp_backend = sdf_core
             self.use_cpp_backend = True
-            print("使用C++后端进行SDF计算")
+            print("✅ C++后端已启用")
         except ImportError:
-            print("C++后端不可用，使用Python实现")
+            print("⚠️ C++后端不可用，使用Python实现")
     
-    def compute_single_sdf(self, 
-                          image_path: str, 
+    def compute_single_sdf(self,
+                          image_path: str,
                           threshold: float = 0.5,
                           normalize: bool = True,
-                          invert: bool = False) -> Tuple[np.ndarray, float]:
+                          invert: bool = False,
+                          sdf_direction: str = "both",
+                          max_distance: int = 100,
+                          num_threads: Optional[int] = None) -> Tuple[np.ndarray, float]:
         """
         计算单张图像的SDF
-        
+
         Args:
             image_path: 图像文件路径
             threshold: 二值化阈值 (0.0-1.0)
             normalize: 是否归一化到[0,1]
             invert: 是否反转内外区域
-            
+            sdf_direction: SDF计算方向 ("both", "inside", "outside")
+            max_distance: 最大距离限制 (像素)
+            num_threads: 线程数 (None表示自动)
+
         Returns:
             (sdf_result, computation_time)
         """
@@ -59,10 +74,10 @@ class SDFGenerator:
             
             if self.use_cpp_backend:
                 # 使用C++后端
-                sdf_result = self._compute_sdf_cpp(image_data, normalize, invert)
+                sdf_result = self._compute_sdf_cpp(image_data, normalize, invert, sdf_direction, max_distance, num_threads)
             else:
                 # 使用Python实现
-                sdf_result = self._compute_sdf_python(image_data, normalize, invert)
+                sdf_result = self._compute_sdf_python(image_data, normalize, invert, sdf_direction, max_distance)
             
             computation_time = time.time() - start_time
             self.last_computation_time = computation_time
@@ -77,7 +92,11 @@ class SDFGenerator:
                          angles: Optional[List[float]] = None,
                          threshold: float = 0.5,
                          normalize: bool = True,
-                         blend_mode: str = "weighted") -> Tuple[np.ndarray, float]:
+                         invert: bool = False,
+                         blend_mode: str = "weighted",
+                         sdf_direction: str = "both",
+                         max_distance: int = 100,
+                         num_threads: Optional[int] = None) -> Tuple[np.ndarray, float]:
         """
         计算多张图像的混合SDF
 
@@ -86,7 +105,11 @@ class SDFGenerator:
             angles: 对应的光照角度列表 (度数)
             threshold: 二值化阈值
             normalize: 是否归一化
+            invert: 是否反转内外区域
             blend_mode: 混合模式 ("weighted", "average", "max", "min")
+            sdf_direction: SDF计算方向 ("both", "inside", "outside")
+            max_distance: 最大距离限制 (像素)
+            num_threads: 线程数 (None表示自动)
 
         Returns:
             (mixed_sdf_result, computation_time)
@@ -106,7 +129,7 @@ class SDFGenerator:
             # 计算每张图像的SDF
             sdf_images = []
             for image_path in image_paths:
-                sdf_result, _ = self.compute_single_sdf(image_path, threshold, normalize)
+                sdf_result, _ = self.compute_single_sdf(image_path, threshold, normalize, invert, sdf_direction, max_distance, num_threads)
                 sdf_images.append(sdf_result)
             
             # 混合多个SDF
@@ -137,7 +160,7 @@ class SDFGenerator:
         
         return binary_image
     
-    def _compute_sdf_cpp(self, binary_image: np.ndarray, normalize: bool, invert: bool) -> np.ndarray:
+    def _compute_sdf_cpp(self, binary_image: np.ndarray, normalize: bool, invert: bool, sdf_direction: str = "both", max_distance: int = 100, num_threads: Optional[int] = None) -> np.ndarray:
         """使用C++后端计算SDF"""
         height, width = binary_image.shape
         
@@ -157,32 +180,53 @@ class SDFGenerator:
         
         return result
     
-    def _compute_sdf_python(self, binary_image: np.ndarray, normalize: bool, invert: bool) -> np.ndarray:
+    def _compute_sdf_python(self, binary_image: np.ndarray, normalize: bool, invert: bool, sdf_direction: str = "both", max_distance: int = 100) -> np.ndarray:
         """使用Python实现计算SDF (8SSEDT算法简化版)"""
         height, width = binary_image.shape
         
         # 计算内部和外部的距离变换
         inside_mask = binary_image > 0.5
         outside_mask = ~inside_mask
-        
-        # 使用OpenCV的距离变换
-        inside_dist = cv2.distanceTransform(
-            inside_mask.astype(np.uint8), 
-            cv2.DIST_L2, 
-            cv2.DIST_MASK_PRECISE
-        )
-        
-        outside_dist = cv2.distanceTransform(
-            outside_mask.astype(np.uint8), 
-            cv2.DIST_L2, 
-            cv2.DIST_MASK_PRECISE
-        )
-        
-        # 计算有向距离场
-        # 标准SDF: 物体外部为正值，内部为负值
-        # 但为了显示方便，我们让物体内部为较大值
-        sdf = outside_dist - inside_dist
-        
+
+        # 根据SDF计算方向选择计算策略
+        if sdf_direction == "inside":
+            # 只计算内部距离
+            inside_dist = cv2.distanceTransform(
+                inside_mask.astype(np.uint8),
+                cv2.DIST_L2,
+                cv2.DIST_MASK_PRECISE
+            )
+            sdf = inside_dist
+        elif sdf_direction == "outside":
+            # 只计算外部距离
+            outside_dist = cv2.distanceTransform(
+                outside_mask.astype(np.uint8),
+                cv2.DIST_L2,
+                cv2.DIST_MASK_PRECISE
+            )
+            sdf = outside_dist
+        else:  # sdf_direction == "both"
+            # 双向计算（默认）
+            inside_dist = cv2.distanceTransform(
+                inside_mask.astype(np.uint8),
+                cv2.DIST_L2,
+                cv2.DIST_MASK_PRECISE
+            )
+
+            outside_dist = cv2.distanceTransform(
+                outside_mask.astype(np.uint8),
+                cv2.DIST_L2,
+                cv2.DIST_MASK_PRECISE
+            )
+
+            # 计算有向距离场
+            # 标准SDF: 物体外部为正值，内部为负值
+            # 但为了显示方便，我们让物体内部为较大值
+            sdf = outside_dist - inside_dist
+
+        # 应用最大距离限制
+        sdf = np.clip(sdf, -max_distance, max_distance)
+
         if normalize:
             # 归一化到[0,1]范围
             min_val, max_val = sdf.min(), sdf.max()
@@ -197,11 +241,14 @@ class SDFGenerator:
         return sdf.astype(np.float32)
     
     def _calculate_even_angles(self, num_images: int) -> List[float]:
-        """计算等角度分布"""
+        """计算等角度分布 - 180度均匀分布"""
         if num_images <= 0:
             return []
-        
-        angle_step = 360.0 / num_images
+
+        if num_images == 1:
+            return [0.0]
+
+        angle_step = 180.0 / num_images
         return [i * angle_step for i in range(num_images)]
     
     def _blend_multiple_sdfs(self, sdf_images: List[np.ndarray], angles: List[float], blend_mode: str = "weighted") -> np.ndarray:

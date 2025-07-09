@@ -135,23 +135,23 @@ class MathUtils:
         return abs(p2[0] - p1[0]) + abs(p2[1] - p1[1])
     
     @staticmethod
-    def calculate_even_distribution(count: int, total_range: float = 360.0) -> List[float]:
+    def calculate_even_distribution(count: int, total_range: float = 180.0) -> List[float]:
         """
-        计算均匀分布的值
-        
+        计算均匀分布的值 - 默认180度分布
+
         Args:
             count: 数量
-            total_range: 总范围
-            
+            total_range: 总范围（默认180度）
+
         Returns:
             均匀分布的值列表
         """
         if count <= 0:
             return []
-        
+
         if count == 1:
             return [0.0]
-        
+
         step = total_range / count
         return [i * step for i in range(count)]
     
