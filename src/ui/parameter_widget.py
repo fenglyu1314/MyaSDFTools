@@ -78,12 +78,13 @@ class ParameterWidget(QWidget):
             self.sdf_direction_combo.addItem(display, value)
         layout.addRow("计算方向:", self.sdf_direction_combo)
 
-        # 混合模式
+        # 混合模式 - 隐藏控件，因为只有一个选项
         self.blend_mode_combo = QComboBox()
         blend_options = ParameterDefaults.get_blend_mode_options()
         for value, display in blend_options:
             self.blend_mode_combo.addItem(display, value)
-        layout.addRow("混合模式:", self.blend_mode_combo)
+        # 不添加到布局中，因为只有一个选项，用户无需选择
+        # layout.addRow("混合模式:", self.blend_mode_combo)
 
     def _create_advanced_parameters(self, layout: QFormLayout):
         """创建高级参数控件"""

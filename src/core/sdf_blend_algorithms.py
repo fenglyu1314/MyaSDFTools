@@ -28,23 +28,20 @@ class SDFBlendAlgorithms:
 
     def blend_multiple_sdfs(self, sdf_images: List[np.ndarray],
                            angles: List[float],
-                           blend_mode: str = "weighted",
+                           blend_mode: str = "sdf_blend",
                            use_cpp_backend: bool = True) -> np.ndarray:
         """
         混合多个SDF图像
-        
-        支持多种混合策略：
-        - weighted: 基于角度权重的智能混合 (旧方法)
-        - sdf_blend: 基于SDF特性的两两混合 (推荐，符合文章算法)
-        - average: 简单平均混合
-        - max: 取最大值混合
-        - min: 取最小值混合
-        
+
+        使用确认正确的SDF混合策略：
+        - sdf_blend: 基于SDF特性的两两混合 (相邻帧混合算法)
+
         Args:
             sdf_images: SDF图像列表
-            angles: 对应的角度列表
-            blend_mode: 混合模式
-            
+            angles: 对应的角度列表 (保留参数兼容性，但不影响混合结果)
+            blend_mode: 混合模式 (固定为sdf_blend)
+            use_cpp_backend: 是否使用C++后端
+
         Returns:
             混合后的SDF
         """
@@ -64,39 +61,18 @@ class SDFBlendAlgorithms:
         if len(sdf_images) == 1:
             return sdf_images[0].copy()
 
-        # 根据混合模式选择策略
-        if blend_mode == "sdf_blend":
-            # 使用SDF特性混合
-            if (use_cpp_backend and self.cpp_interface and self.cpp_interface.is_available()
-                and hasattr(self.cpp_interface.cpp_backend, 'blend_multiple_sdfs')):
-                # 使用C++后端混合
-                try:
-                    return self.cpp_interface.blend_multiple_sdfs_cpp(sdf_images)
-                except Exception as e:
-                    print(f"⚠️ C++混合失败，回退到Python实现: {e}")
-                    return self.blend_sdf_pairwise(sdf_images, angles)
-            else:
-                # 使用Python实现
+        # 使用SDF特性混合 (唯一支持的混合模式)
+        if (use_cpp_backend and self.cpp_interface and self.cpp_interface.is_available()
+            and hasattr(self.cpp_interface.cpp_backend, 'blend_multiple_sdfs')):
+            # 使用C++后端混合
+            try:
+                return self.cpp_interface.blend_multiple_sdfs_cpp(sdf_images)
+            except Exception as e:
+                print(f"⚠️ C++混合失败，回退到Python实现: {e}")
                 return self.blend_sdf_pairwise(sdf_images, angles)
-        elif blend_mode == "weighted":
-            return self.blend_weighted(sdf_images, angles)
-        elif blend_mode == "average":
-            return self.blend_average(sdf_images)
-        elif blend_mode == "max":
-            return self.blend_max(sdf_images)
-        elif blend_mode == "min":
-            return self.blend_min(sdf_images)
         else:
-            # 默认使用SDF特性混合
-            if (use_cpp_backend and self.cpp_interface and self.cpp_interface.is_available()
-                and hasattr(self.cpp_interface.cpp_backend, 'blend_multiple_sdfs')):
-                try:
-                    return self.cpp_interface.blend_multiple_sdfs_cpp(sdf_images)
-                except Exception as e:
-                    print(f"⚠️ C++混合失败，回退到Python实现: {e}")
-                    return self.blend_sdf_pairwise(sdf_images, angles)
-            else:
-                return self.blend_sdf_pairwise(sdf_images, angles)
+            # 使用Python实现
+            return self.blend_sdf_pairwise(sdf_images, angles)
 
     def blend_sdf_pairwise(self, sdf_images: List[np.ndarray], angles: List[float]) -> np.ndarray:
         """
@@ -206,80 +182,4 @@ class SDFBlendAlgorithms:
 
         return result
 
-    @staticmethod
-    def blend_weighted(sdf_images: List[np.ndarray], angles: List[float]) -> np.ndarray:
-        """
-        基于角度权重的混合
-        
-        Args:
-            sdf_images: SDF图像列表
-            angles: 角度列表
-            
-        Returns:
-            混合后的SDF
-        """
-        height, width = sdf_images[0].shape
-        result = np.zeros((height, width), dtype=np.float32)
-        total_weight = 0.0
 
-        # 计算权重并混合
-        for i, (sdf, angle) in enumerate(zip(sdf_images, angles)):
-            # 基于角度计算权重（这里使用简单的均匀权重）
-            weight = 1.0 / len(sdf_images)
-            result += sdf * weight
-            total_weight += weight
-
-        # 归一化
-        if total_weight > 0:
-            result /= total_weight
-
-        return result
-
-    @staticmethod
-    def blend_average(sdf_images: List[np.ndarray]) -> np.ndarray:
-        """
-        简单平均混合
-        
-        Args:
-            sdf_images: SDF图像列表
-            
-        Returns:
-            混合后的SDF
-        """
-        result = np.zeros_like(sdf_images[0], dtype=np.float32)
-        for sdf in sdf_images:
-            result += sdf
-        result /= len(sdf_images)
-        return result
-
-    @staticmethod
-    def blend_max(sdf_images: List[np.ndarray]) -> np.ndarray:
-        """
-        最大值混合
-        
-        Args:
-            sdf_images: SDF图像列表
-            
-        Returns:
-            混合后的SDF
-        """
-        result = sdf_images[0].copy()
-        for sdf in sdf_images[1:]:
-            result = np.maximum(result, sdf)
-        return result
-
-    @staticmethod
-    def blend_min(sdf_images: List[np.ndarray]) -> np.ndarray:
-        """
-        最小值混合
-        
-        Args:
-            sdf_images: SDF图像列表
-            
-        Returns:
-            混合后的SDF
-        """
-        result = sdf_images[0].copy()
-        for sdf in sdf_images[1:]:
-            result = np.minimum(result, sdf)
-        return result

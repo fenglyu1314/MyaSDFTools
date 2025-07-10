@@ -294,8 +294,11 @@ class MainWindowEventHandler(QObject):
                 import numpy as np
                 np.save(file_path, self.sdf_result)
             else:
-                # 导出为图像格式
-                ImageUtils.save_sdf_as_image(self.sdf_result, file_path)
+                # 导出为图像格式 - 使用专门的SDF导出方法，确保输出为灰度图像
+                from ..utils.export_manager import ExportManager
+                success = ExportManager.export_sdf_image(self.sdf_result, file_path, file_ext[1:])
+                if not success:
+                    raise RuntimeError("SDF图像导出失败")
             
             self.status_updated.emit(f"SDF已导出到: {file_path}")
             

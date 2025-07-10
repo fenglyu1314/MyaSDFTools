@@ -94,25 +94,26 @@ class SDFGenerator:
                          threshold: float = 0.5,
                          normalize: bool = True,
                          invert: bool = False,
-                         blend_mode: str = "weighted",
+                         blend_mode: str = "sdf_blend",
                          sdf_direction: str = "both",
                          max_distance: int = 100,
                          num_threads: Optional[int] = None,
                          use_cpp_backend: bool = True) -> Tuple[np.ndarray, float]:
         """
         计算多张图像的混合SDF
-        
+
         Args:
             image_paths: 图像文件路径列表
-            angles: 对应的光照角度列表 (度数)
+            angles: 对应的光照角度列表 (度数，保留兼容性)
             threshold: 二值化阈值
             normalize: 是否归一化
             invert: 是否反转内外区域
-            blend_mode: 混合模式 ("weighted", "sdf_blend", "average", "max", "min")
+            blend_mode: 混合模式 (固定为"sdf_blend")
             sdf_direction: SDF计算方向 ("both", "inside", "outside")
             max_distance: 最大距离限制 (像素)
             num_threads: 线程数 (None表示自动)
-            
+            use_cpp_backend: 是否使用C++后端
+
         Returns:
             (mixed_sdf_result, computation_time)
         """

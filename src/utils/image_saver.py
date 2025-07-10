@@ -23,7 +23,7 @@ class ImageSaver:
     @staticmethod
     def save_sdf_as_image(sdf_data: np.ndarray,
                          file_path: str,
-                         colormap: str = 'viridis',
+                         colormap: str = 'gray',
                          quality: int = 95) -> bool:
         """将SDF数据保存为图像
 

@@ -32,13 +32,9 @@ class ParameterDefaults:
         'ambient_light': (0.0, 1.0, 0.1)
     }
 
-    # 混合模式选项
+    # 混合模式选项 - 只保留确认正确的混合模式
     BLEND_MODES = [
-        ('sdf_blend', 'SDF混合'),
-        ('weighted', '加权平均'),
-        ('average', '简单平均'),
-        ('max', '最大值'),
-        ('min', '最小值')
+        ('sdf_blend', 'SDF混合')
     ]
 
     # SDF计算方向选项
