@@ -47,20 +47,14 @@ python quick_start.py
 python main.py
 ```
 
-### 3. C++扩展 (可选)
+### 3. C++扩展 (可选，提升性能)
 
 ```bash
-# Windows (Visual Studio)
-mkdir build
-cd build
-cmake ..
-cmake --build . --config Release
-
-# Linux/Mac
-mkdir build && cd build
-cmake ..
-make -j4
+# 编译C++扩展以获得更好的性能
+python setup_cpp_extension.py build_ext --inplace
 ```
+
+程序会自动检测C++扩展是否可用，如果可用会自动使用高性能的C++后端。
 
 ### 4. 运行程序
 
