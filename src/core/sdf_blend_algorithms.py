@@ -1,0 +1,285 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+"""
+SDF混合算法模块
+
+实现多种SDF混合策略：
+- 基于SDF特性的两两混合
+- 权重混合
+- 简单混合模式（平均、最大、最小）
+"""
+
+from typing import List
+import numpy as np
+
+
+class SDFBlendAlgorithms:
+    """SDF混合算法实现"""
+
+    def __init__(self, cpp_interface=None):
+        """
+        初始化混合算法
+
+        Args:
+            cpp_interface: C++接口实例，用于C++后端混合
+        """
+        self.cpp_interface = cpp_interface
+
+    def blend_multiple_sdfs(self, sdf_images: List[np.ndarray],
+                           angles: List[float],
+                           blend_mode: str = "weighted",
+                           use_cpp_backend: bool = True) -> np.ndarray:
+        """
+        混合多个SDF图像
+        
+        支持多种混合策略：
+        - weighted: 基于角度权重的智能混合 (旧方法)
+        - sdf_blend: 基于SDF特性的两两混合 (推荐，符合文章算法)
+        - average: 简单平均混合
+        - max: 取最大值混合
+        - min: 取最小值混合
+        
+        Args:
+            sdf_images: SDF图像列表
+            angles: 对应的角度列表
+            blend_mode: 混合模式
+            
+        Returns:
+            混合后的SDF
+        """
+        if not sdf_images:
+            raise ValueError("SDF图像列表不能为空")
+
+        if len(sdf_images) != len(angles):
+            raise ValueError("SDF图像数量必须与角度数量相同")
+
+        # 确保所有图像尺寸相同
+        height, width = sdf_images[0].shape
+        for sdf in sdf_images[1:]:
+            if sdf.shape != (height, width):
+                raise ValueError("所有SDF图像必须具有相同的尺寸")
+
+        # 如果只有一张图像，直接返回
+        if len(sdf_images) == 1:
+            return sdf_images[0].copy()
+
+        # 根据混合模式选择策略
+        if blend_mode == "sdf_blend":
+            # 使用SDF特性混合
+            if (use_cpp_backend and self.cpp_interface and self.cpp_interface.is_available()
+                and hasattr(self.cpp_interface.cpp_backend, 'blend_multiple_sdfs')):
+                # 使用C++后端混合
+                try:
+                    return self.cpp_interface.blend_multiple_sdfs_cpp(sdf_images)
+                except Exception as e:
+                    print(f"⚠️ C++混合失败，回退到Python实现: {e}")
+                    return self.blend_sdf_pairwise(sdf_images, angles)
+            else:
+                # 使用Python实现
+                return self.blend_sdf_pairwise(sdf_images, angles)
+        elif blend_mode == "weighted":
+            return self.blend_weighted(sdf_images, angles)
+        elif blend_mode == "average":
+            return self.blend_average(sdf_images)
+        elif blend_mode == "max":
+            return self.blend_max(sdf_images)
+        elif blend_mode == "min":
+            return self.blend_min(sdf_images)
+        else:
+            # 默认使用SDF特性混合
+            if (use_cpp_backend and self.cpp_interface and self.cpp_interface.is_available()
+                and hasattr(self.cpp_interface.cpp_backend, 'blend_multiple_sdfs')):
+                try:
+                    return self.cpp_interface.blend_multiple_sdfs_cpp(sdf_images)
+                except Exception as e:
+                    print(f"⚠️ C++混合失败，回退到Python实现: {e}")
+                    return self.blend_sdf_pairwise(sdf_images, angles)
+            else:
+                return self.blend_sdf_pairwise(sdf_images, angles)
+
+    def blend_sdf_pairwise(self, sdf_images: List[np.ndarray], angles: List[float]) -> np.ndarray:
+        """
+        基于SDF特性的两两混合算法
+        
+        实现文章中描述的算法：
+        1. 将每两帧进行SDF特性混合
+        2. 将所有混合结果相加并归一化
+        
+        参考算法：
+        float SDFA = Sample(A) * 2.0 - 1.0;
+        float SDFB = Sample(B) * 2.0 - 1.0;
+        
+        if(SDFA < 0.0) result = 1.0;           // 在A内部
+        else if(SDFB > 0.0) result = 0.0;      // 在B外部
+        else result = abs(SDFB) / (abs(SDFB) + SDFA);  // 在A外部且B内部
+        
+        Args:
+            sdf_images: SDF图像列表
+            angles: 角度列表
+            
+        Returns:
+            混合后的SDF
+        """
+        height, width = sdf_images[0].shape
+        num_images = len(sdf_images)
+
+        # 存储所有两两混合的结果
+        blend_results = []
+
+        print(f"🔄 开始SDF特性混合，共{num_images}张图像")
+
+        # 相邻帧混合（更合理的策略）
+        for i in range(num_images - 1):
+            sdf_a = sdf_images[i]
+            sdf_b = sdf_images[i + 1]
+
+            # 执行两两SDF混合
+            blend_result = SDFBlendAlgorithms.blend_two_sdfs(sdf_a, sdf_b)
+            blend_results.append(blend_result)
+
+            print(f"  ✅ 混合第{i+1}帧和第{i+2}帧")
+
+        print(f"🎯 SDF相邻帧混合完成，共生成{len(blend_results)}个混合结果")
+
+        # 将所有混合结果相加并归一化
+        if blend_results:
+            final_result = np.mean(blend_results, axis=0)
+        else:
+            final_result = sdf_images[0] if sdf_images else np.zeros((height, width))
+
+        print(f"📊 最终混合结果值范围: [{np.min(final_result):.3f}, {np.max(final_result):.3f}]")
+
+        return final_result
+
+    @staticmethod
+    def blend_two_sdfs(sdf_a: np.ndarray, sdf_b: np.ndarray) -> np.ndarray:
+        """
+        两个SDF的特性混合
+
+        实现文章中的核心混合算法
+
+        按照文章的SDF格式：
+        - 0.0-0.5: 内部区域 (距离边界越远值越小，中心最暗)
+        - 0.5: 边界
+        - 0.5-1.0: 外部区域 (距离边界越远值越大，外部最亮)
+
+        Args:
+            sdf_a: 第一个SDF (0-1范围)
+            sdf_b: 第二个SDF (0-1范围)
+
+        Returns:
+            混合结果
+        """
+        # 将SDF从[0,1]转换到[-1,1]范围
+        # 按照文章的定义：0.5 -> 0 (边界), <0.5 -> 负值 (内部), >0.5 -> 正值 (外部)
+        SDFA = (sdf_a - 0.5) * 2.0
+        SDFB = (sdf_b - 0.5) * 2.0
+
+        # 初始化结果数组
+        result = np.zeros_like(sdf_a, dtype=np.float32)
+
+        # 应用混合规则 (注意：现在<0.5是内部，>0.5是外部)
+        # 在A内部 (SDFA < 0, 即 sdf_a < 0.5)
+        mask_a_inside = SDFA < 0.0
+        result[mask_a_inside] = 1.0
+
+        # 在B外部 (SDFB > 0, 即 sdf_b > 0.5)
+        mask_b_outside = SDFB > 0.0
+        result[mask_b_outside] = 0.0
+
+        # 在A外部且B内部 (SDFA >= 0 and SDFB <= 0)
+        mask_transition = (~mask_a_inside) & (~mask_b_outside)
+        if np.any(mask_transition):
+            abs_SDFB = np.abs(SDFB[mask_transition])
+            abs_SDFA = np.abs(SDFA[mask_transition])
+            # 避免除零
+            denominator = abs_SDFB + abs_SDFA
+            safe_mask = denominator > 1e-8
+            if np.any(safe_mask):
+                transition_indices = np.where(mask_transition)
+                safe_indices = np.where(safe_mask)
+                result[transition_indices[0][safe_indices], transition_indices[1][safe_indices]] = \
+                    abs_SDFB[safe_indices] / denominator[safe_indices]
+
+        print(f"🔄 SDF混合完成 - A内部像素: {np.sum(mask_a_inside)}, B外部像素: {np.sum(mask_b_outside)}, 过渡像素: {np.sum(mask_transition)}")
+
+        return result
+
+    @staticmethod
+    def blend_weighted(sdf_images: List[np.ndarray], angles: List[float]) -> np.ndarray:
+        """
+        基于角度权重的混合
+        
+        Args:
+            sdf_images: SDF图像列表
+            angles: 角度列表
+            
+        Returns:
+            混合后的SDF
+        """
+        height, width = sdf_images[0].shape
+        result = np.zeros((height, width), dtype=np.float32)
+        total_weight = 0.0
+
+        # 计算权重并混合
+        for i, (sdf, angle) in enumerate(zip(sdf_images, angles)):
+            # 基于角度计算权重（这里使用简单的均匀权重）
+            weight = 1.0 / len(sdf_images)
+            result += sdf * weight
+            total_weight += weight
+
+        # 归一化
+        if total_weight > 0:
+            result /= total_weight
+
+        return result
+
+    @staticmethod
+    def blend_average(sdf_images: List[np.ndarray]) -> np.ndarray:
+        """
+        简单平均混合
+        
+        Args:
+            sdf_images: SDF图像列表
+            
+        Returns:
+            混合后的SDF
+        """
+        result = np.zeros_like(sdf_images[0], dtype=np.float32)
+        for sdf in sdf_images:
+            result += sdf
+        result /= len(sdf_images)
+        return result
+
+    @staticmethod
+    def blend_max(sdf_images: List[np.ndarray]) -> np.ndarray:
+        """
+        最大值混合
+        
+        Args:
+            sdf_images: SDF图像列表
+            
+        Returns:
+            混合后的SDF
+        """
+        result = sdf_images[0].copy()
+        for sdf in sdf_images[1:]:
+            result = np.maximum(result, sdf)
+        return result
+
+    @staticmethod
+    def blend_min(sdf_images: List[np.ndarray]) -> np.ndarray:
+        """
+        最小值混合
+        
+        Args:
+            sdf_images: SDF图像列表
+            
+        Returns:
+            混合后的SDF
+        """
+        result = sdf_images[0].copy()
+        for sdf in sdf_images[1:]:
+            result = np.minimum(result, sdf)
+        return result

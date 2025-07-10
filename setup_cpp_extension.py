@@ -14,7 +14,7 @@ from setuptools import setup
 
 # 简单版本的源文件
 cpp_sources = [
-    "src/cpp/simple_sdf.cpp"
+    "src/cpp/simple_sdf_test.cpp"
 ]
 
 # 包含目录

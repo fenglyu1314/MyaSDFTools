@@ -219,9 +219,10 @@ class ZoomableImageWidget(QWidget):
     # 信号定义
     zoom_changed = Signal(float)
     
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, auto_fit=True):
         super().__init__(parent)
-        
+        self.auto_fit = auto_fit  # 是否自动适应窗口
+
         self._init_ui()
     
     def _init_ui(self):
@@ -238,6 +239,9 @@ class ZoomableImageWidget(QWidget):
     def set_image(self, pixmap: QPixmap):
         """设置图像"""
         self.image_label.set_image(pixmap)
+        # 如果启用自动适应，设置图像后自动适应窗口
+        if self.auto_fit and not pixmap.isNull():
+            self.fit_to_window()
     
     def fit_to_window(self):
         """适应窗口大小"""

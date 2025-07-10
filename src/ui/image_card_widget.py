@@ -207,8 +207,8 @@ class ImageCardsContainer(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.image_cards = []  # 存储图像卡片
-        self.max_images = 10   # 最大图像数量
-        
+        self.max_images = 8    # 最大图像数量改为8张
+
         self._init_ui()
     
     def _init_ui(self):
@@ -220,8 +220,16 @@ class ImageCardsContainer(QWidget):
     
     def add_image(self, image_path: str, angle: int = None) -> bool:
         """添加图像卡片"""
+        # 检查数量限制
         if len(self.image_cards) >= self.max_images:
+            print(f"❌ 图像卡片数量已达上限({self.max_images}张)")
             return False
+
+        # 检查是否已存在（避免重复添加）
+        for card in self.image_cards:
+            if card.get_image_path() == image_path:
+                print(f"⚠️ 图像卡片已存在: {image_path}")
+                return False
 
         # 创建图像卡片，先使用临时角度0
         card = ImageCardWidget(image_path, 0)
@@ -236,6 +244,7 @@ class ImageCardsContainer(QWidget):
         self._redistribute_angles()
 
         self.images_changed.emit()
+        print(f"✅ 成功添加图像卡片: {image_path}")
         return True
     
     def _remove_image(self, image_path: str):
