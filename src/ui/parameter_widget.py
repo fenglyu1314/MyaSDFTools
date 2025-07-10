@@ -140,8 +140,8 @@ class ParameterWidget(QWidget):
 
         # === 混合模式 ===
         self.blend_mode_combo = QComboBox()
-        self.blend_mode_combo.addItems(["智能权重", "简单平均", "最大值", "最小值"])
-        self.blend_mode_combo.setCurrentText("智能权重")
+        self.blend_mode_combo.addItems(["SDF特性混合", "智能权重", "简单平均", "最大值", "最小值"])
+        self.blend_mode_combo.setCurrentText("SDF特性混合")
         #self.blend_mode_combo.setFixedWidth(120)
         layout.addRow("混合模式:", self.blend_mode_combo)
 
@@ -338,9 +338,10 @@ class ParameterWidget(QWidget):
     def get_blend_mode(self) -> str:
         """获取混合模式"""
         blend_mode_map = {
+            "SDF特性混合": "sdf_blend",
             "智能权重": "weighted",
             "简单平均": "average",
             "最大值": "max",
             "最小值": "min"
         }
-        return blend_mode_map.get(self.blend_mode_combo.currentText(), "weighted")
+        return blend_mode_map.get(self.blend_mode_combo.currentText(), "sdf_blend")

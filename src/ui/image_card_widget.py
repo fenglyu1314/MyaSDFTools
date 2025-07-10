@@ -145,13 +145,15 @@ class ImageCardWidget(QFrame):
         try:
             pixmap = QPixmap(self.image_path)
             if not pixmap.isNull():
-                # 缩放到100x100，保持宽高比
+                # 缩放到80x80，保持宽高比，确保完整显示
                 scaled_pixmap = pixmap.scaled(
-                    100, 100, 
-                    Qt.KeepAspectRatio, 
+                    80, 80,
+                    Qt.KeepAspectRatio,
                     Qt.SmoothTransformation
                 )
                 self.thumbnail_label.setPixmap(scaled_pixmap)
+                # 确保图像居中显示
+                self.thumbnail_label.setAlignment(Qt.AlignCenter)
             else:
                 self.thumbnail_label.setText("无法\n加载图像")
                 self.thumbnail_label.setStyleSheet(self.thumbnail_label.styleSheet() + """

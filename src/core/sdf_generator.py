@@ -167,9 +167,9 @@ class SDFGenerator:
         # 将numpy数组转换为列表
         image_data = binary_image.flatten().tolist()
         
-        # 调用C++函数
+        # 调用C++函数，传递max_distance参数
         sdf_result = self.cpp_backend.compute_single_sdf(
-            image_data, width, height, 0.5, normalize
+            image_data, width, height, 0.5, normalize, max_distance
         )
         
         # 转换回numpy数组
@@ -181,9 +181,9 @@ class SDFGenerator:
         return result
     
     def _compute_sdf_python(self, binary_image: np.ndarray, normalize: bool, invert: bool, sdf_direction: str = "both", max_distance: int = 100) -> np.ndarray:
-        """使用Python实现计算SDF (8SSEDT算法简化版)"""
+        """使用Python实现计算SDF (改进的距离场算法)"""
         height, width = binary_image.shape
-        
+
         # 计算内部和外部的距离变换
         inside_mask = binary_image > 0.5
         outside_mask = ~inside_mask
@@ -206,23 +206,8 @@ class SDFGenerator:
             )
             sdf = outside_dist
         else:  # sdf_direction == "both"
-            # 双向计算（默认）
-            inside_dist = cv2.distanceTransform(
-                inside_mask.astype(np.uint8),
-                cv2.DIST_L2,
-                cv2.DIST_MASK_PRECISE
-            )
-
-            outside_dist = cv2.distanceTransform(
-                outside_mask.astype(np.uint8),
-                cv2.DIST_L2,
-                cv2.DIST_MASK_PRECISE
-            )
-
-            # 计算有向距离场
-            # 标准SDF: 物体外部为正值，内部为负值
-            # 但为了显示方便，我们让物体内部为较大值
-            sdf = outside_dist - inside_dist
+            # 双向计算（默认）- 改进的SDF算法
+            sdf = self._compute_improved_sdf(inside_mask, max_distance)
 
         # 应用最大距离限制
         sdf = np.clip(sdf, -max_distance, max_distance)
@@ -234,11 +219,45 @@ class SDFGenerator:
                 sdf = (sdf - min_val) / (max_val - min_val)
             else:
                 sdf = np.ones_like(sdf) * 0.5
-        
+
         if invert:
             sdf = 1.0 - sdf
-        
+
         return sdf.astype(np.float32)
+
+    def _compute_improved_sdf(self, inside_mask: np.ndarray, max_distance: int) -> np.ndarray:
+        """
+        改进的SDF计算算法
+
+        基于8SSEDT的思想，但使用OpenCV优化实现
+        确保物体内部为正值，外部为负值，边界为0
+        """
+        # 计算内部距离（到边界的距离）
+        inside_dist = cv2.distanceTransform(
+            inside_mask.astype(np.uint8),
+            cv2.DIST_L2,
+            cv2.DIST_MASK_PRECISE
+        )
+
+        # 计算外部距离（到边界的距离）
+        outside_mask = ~inside_mask
+        outside_dist = cv2.distanceTransform(
+            outside_mask.astype(np.uint8),
+            cv2.DIST_L2,
+            cv2.DIST_MASK_PRECISE
+        )
+
+        # 构建有向距离场
+        # 内部：正值（距离边界越远值越大）
+        # 外部：负值（距离边界越远值越小）
+        # 边界：接近0
+        sdf = np.where(inside_mask, inside_dist, -outside_dist)
+
+        # 平滑边界过渡
+        # 使用高斯模糊轻微平滑，模拟8SSEDT的平滑效果
+        sdf = cv2.GaussianBlur(sdf.astype(np.float32), (3, 3), 0.5)
+
+        return sdf
     
     def _calculate_even_angles(self, num_images: int) -> List[float]:
         """计算等角度分布 - 180度均匀分布"""
@@ -256,7 +275,8 @@ class SDFGenerator:
         混合多个SDF图像
 
         支持多种混合策略：
-        - weighted: 基于角度权重的智能混合 (推荐)
+        - weighted: 基于角度权重的智能混合 (旧方法)
+        - sdf_blend: 基于SDF特性的两两混合 (推荐，符合文章算法)
         - average: 简单平均混合
         - max: 取最大值混合
         - min: 取最小值混合
@@ -278,7 +298,9 @@ class SDFGenerator:
             return sdf_images[0].copy()
 
         # 根据混合模式选择策略
-        if blend_mode == "weighted":
+        if blend_mode == "sdf_blend":
+            return self._blend_sdf_pairwise(sdf_images, angles)
+        elif blend_mode == "weighted":
             return self._blend_weighted(sdf_images, angles)
         elif blend_mode == "average":
             return self._blend_average(sdf_images)
@@ -287,8 +309,8 @@ class SDFGenerator:
         elif blend_mode == "min":
             return self._blend_min(sdf_images)
         else:
-            # 默认使用加权混合
-            return self._blend_weighted(sdf_images, angles)
+            # 默认使用SDF特性混合
+            return self._blend_sdf_pairwise(sdf_images, angles)
 
     def _blend_weighted(self, sdf_images: List[np.ndarray], angles: List[float]) -> np.ndarray:
         """基于角度权重的混合"""
@@ -334,11 +356,111 @@ class SDFGenerator:
 
         return result
 
+    def _blend_sdf_pairwise(self, sdf_images: List[np.ndarray], angles: List[float]) -> np.ndarray:
+        """
+        基于SDF特性的两两混合算法
+
+        实现文章中描述的算法：
+        1. 将每两帧进行SDF特性混合
+        2. 将所有混合结果相加并归一化
+
+        参考算法：
+        float SDFA = Sample(A) * 2.0 - 1.0;
+        float SDFB = Sample(B) * 2.0 - 1.0;
+
+        if(SDFA < 0.0) result = 1.0;           // 在A内部
+        else if(SDFB > 0.0) result = 0.0;      // 在B外部
+        else result = abs(SDFB) / (abs(SDFB) + SDFA);  // 在A外部且B内部
+        """
+        height, width = sdf_images[0].shape
+        num_images = len(sdf_images)
+
+        # 存储所有两两混合的结果
+        blend_results = []
+
+        print(f"🔄 开始SDF特性混合，共{num_images}张图像")
+
+        # 对每两张图像进行混合（文章中的正确算法）
+        for i in range(num_images):
+            for j in range(i + 1, num_images):
+                sdf_a = sdf_images[i]
+                sdf_b = sdf_images[j]
+
+                # 执行两两SDF混合
+                blend_result = self._blend_two_sdfs(sdf_a, sdf_b)
+                blend_results.append(blend_result)
+
+                print(f"  ✅ 混合第{i+1}帧和第{j+1}帧")
+
+        if not blend_results:
+            # 如果没有混合结果，返回第一张图像
+            return sdf_images[0].copy()
+
+        # 将所有混合结果相加并归一化
+        final_result = np.zeros((height, width), dtype=np.float32)
+        for blend_result in blend_results:
+            final_result += blend_result
+
+        # 归一化：除以混合结果的数量
+        final_result /= len(blend_results)
+
+        print(f"🎯 SDF特性混合完成，共生成{len(blend_results)}个混合结果")
+
+        return final_result
+
+    def _blend_two_sdfs(self, sdf_a: np.ndarray, sdf_b: np.ndarray) -> np.ndarray:
+        """
+        两张SDF图像的混合
+
+        实现文章中的核心算法：
+        - 情况1: 在A内部 → 值为1 (优先级最高)
+        - 情况2: 在B外部 → 值为0
+        - 情况3: 在A外部且B内部 → 基于距离权重过渡
+
+        注意：情况1的优先级高于情况2，即如果在A内部，无论B的状态如何都返回1
+        """
+        # 转换SDF值到[-1, 1]范围 (文章中的关键步骤)
+        sdf_a_signed = sdf_a * 2.0 - 1.0
+        sdf_b_signed = sdf_b * 2.0 - 1.0
+
+        # 初始化结果
+        result = np.zeros_like(sdf_a, dtype=np.float32)
+
+        # 情况1: 当前位置在A里面 (SDFA < 0) - 优先级最高
+        mask_a_inside = sdf_a_signed < 0.0
+
+        # 情况2: 当前位置在B外面 (SDFB > 0) - 但不在A内部
+        mask_b_outside = (sdf_b_signed > 0.0) & (~mask_a_inside)
+
+        # 情况3: 当前位置在B里面，A的外面 (SDFA >= 0 and SDFB <= 0)
+        mask_transition = (sdf_a_signed >= 0.0) & (sdf_b_signed <= 0.0)
+
+        # 应用规则
+        result[mask_a_inside] = 1.0  # 情况1: A内部 → 1
+        result[mask_b_outside] = 0.0  # 情况2: B外部且A外部 → 0
+
+        # 情况3: 过渡区域
+        if np.any(mask_transition):
+            # 计算过渡值: abs(SDFB) / (abs(SDFB) + SDFA)
+            abs_sdf_b = np.abs(sdf_b_signed[mask_transition])
+            sdf_a_pos = sdf_a_signed[mask_transition]
+
+            # 避免除零错误
+            denominator = abs_sdf_b + sdf_a_pos
+            safe_mask = denominator > 1e-8
+
+            transition_values = np.zeros_like(abs_sdf_b)
+            transition_values[safe_mask] = abs_sdf_b[safe_mask] / denominator[safe_mask]
+
+            result[mask_transition] = transition_values
+
+        return result
+
     def _calculate_angle_weights(self, angles: List[float]) -> List[float]:
         """
         计算角度权重
 
-        基于角度分布的均匀性计算权重，确保角度分布越均匀，混合效果越好
+        基于角度的重要性计算权重，让不同角度有明显的权重差异
 
         Args:
             angles: 角度列表 (度数)
@@ -354,35 +476,19 @@ class SDFGenerator:
 
         # 将角度标准化到[0, 360)范围
         normalized_angles = [(angle % 360.0) for angle in angles]
-
-        # 计算角度间隔
-        sorted_angles = sorted(normalized_angles)
-
-        # 计算每个角度的权重
-        weights = []
         n = len(angles)
 
-        for i, angle in enumerate(normalized_angles):
-            # 找到当前角度在排序列表中的位置
-            sorted_index = sorted_angles.index(angle)
+        # 基于角度位置计算权重
+        weights = []
+        for angle in normalized_angles:
+            # 基于角度的重要性函数
+            # 0度和180度权重最高，90度和270度权重较低
+            angle_rad = np.radians(angle)
 
-            # 计算前后角度间隔
-            prev_angle = sorted_angles[(sorted_index - 1) % n]
-            next_angle = sorted_angles[(sorted_index + 1) % n]
-
-            # 计算角度间隔 (考虑360度循环)
-            prev_gap = self._angle_difference(angle, prev_angle)
-            next_gap = self._angle_difference(next_angle, angle)
-
-            # 基于间隔计算权重 (间隔越大，权重越高)
-            gap_factor = (prev_gap + next_gap) / 2.0
-
-            # 基础权重 + 间隔调整
-            base_weight = 1.0 / n
-            gap_adjustment = gap_factor / 180.0  # 标准化到[0,2]
-
-            weight = base_weight * (0.5 + gap_adjustment)
-            weights.append(weight)
+            # 使用余弦函数创建权重差异
+            # cos(0) = 1, cos(90) = 0, cos(180) = -1, cos(270) = 0
+            importance = abs(np.cos(angle_rad)) + 0.5  # 范围[0.5, 1.5]
+            weights.append(importance)
 
         # 归一化权重
         total_weight = sum(weights)

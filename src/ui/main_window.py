@@ -1213,20 +1213,88 @@ class MainWindow(QMainWindow):
             try:
                 # 使用ImageUtils保存SDF结果
                 if hasattr(self.sdf_result, 'shape'):
-                    # 如果是numpy数组，使用SDF专用保存方法
-                    success = ImageUtils.save_sdf_as_image(self.sdf_result, file_path, quality=95)
+                    # 如果是numpy数组，使用SDF专用保存方法，保存为灰度图像
+                    success = ImageUtils.save_sdf_as_image(self.sdf_result, file_path, colormap='gray', quality=95)
                 else:
                     # 如果是其他格式，使用通用保存方法
                     success = ImageUtils.save_image(self.sdf_result, file_path, quality=95)
 
                 if success:
                     self.status_label.setText(f"SDF已导出到: {file_path}")
-                    QMessageBox.information(self, "导出成功", f"SDF已成功导出到:\n{file_path}")
+
+                    # 询问是否打开文件夹
+                    reply = QMessageBox.question(
+                        self,
+                        "导出成功",
+                        f"SDF已成功导出到:\n{file_path}\n\n是否要打开文件所在的文件夹？",
+                        QMessageBox.Yes | QMessageBox.No,
+                        QMessageBox.Yes
+                    )
+
+                    if reply == QMessageBox.Yes:
+                        self._open_file_location(file_path)
                 else:
                     QMessageBox.warning(self, "导出错误", "导出SDF时发生未知错误")
 
             except Exception as e:
                 QMessageBox.warning(self, "导出错误", f"导出SDF时发生错误：\n{str(e)}")
+
+    def _open_file_location(self, file_path: str):
+        """打开文件所在的文件夹或直接打开文件夹"""
+        try:
+            import os
+            import platform
+            import subprocess
+            from pathlib import Path
+
+            # 确保路径存在
+            if not os.path.exists(file_path):
+                QMessageBox.warning(self, "错误", "路径不存在，无法打开文件夹")
+                return
+
+            path_obj = Path(file_path).resolve()  # 获取绝对路径
+
+            # 判断是文件还是文件夹
+            if path_obj.is_file():
+                # 是文件，获取文件所在的目录
+                folder_path = str(path_obj.parent)
+                target_path = str(path_obj)
+            else:
+                # 是文件夹，直接使用
+                folder_path = str(path_obj)
+                target_path = str(path_obj)
+
+            # 使用更可靠的方法打开文件夹
+            system = platform.system()
+
+            try:
+                if system == "Windows":
+                    # Windows: 统一使用os.startfile打开文件夹
+                    # 无论是文件还是文件夹，都打开其所在的文件夹
+                    os.startfile(folder_path)
+                elif system == "Darwin":  # macOS
+                    if path_obj.is_file():
+                        # macOS: 使用Finder并选中文件
+                        subprocess.run(['open', '-R', target_path], check=False)
+                    else:
+                        # macOS: 直接打开文件夹
+                        subprocess.run(['open', folder_path], check=False)
+                else:  # Linux和其他Unix系统
+                    # Linux: 使用xdg-open打开文件夹
+                    try:
+                        os.startfile(folder_path)
+                    except:
+                        subprocess.run(['xdg-open', folder_path], check=False)
+
+                print(f"✅ 已打开文件位置: {folder_path}")
+
+            except Exception as e:
+                print(f"❌ 打开文件夹失败: {e}")
+                QMessageBox.warning(self, "错误", f"无法打开文件夹：\n{str(e)}")
+
+        except Exception as e:
+            print(f"打开文件夹失败: {e}")
+            QMessageBox.warning(self, "错误", f"无法打开文件夹：\n{str(e)}")
 
     def _clear_images(self):
         """清空所有图像"""
@@ -1514,9 +1582,9 @@ class MainWindow(QMainWindow):
                     self.status_label.setText(f"正在导出: {output_name} ({i+1}/{len(self.batch_sdf_results)})")
                     self.progress_bar.setValue(i)
 
-                    # 导出SDF
+                    # 导出SDF，保存为灰度图像
                     from ..utils.image_utils import ImageUtils
-                    if ImageUtils.save_sdf_as_image(sdf_result, str(output_path)):
+                    if ImageUtils.save_sdf_as_image(sdf_result, str(output_path), colormap='gray'):
                         success_count += 1
                         print(f"  ✅ 导出成功: {output_name}")
                     else:
@@ -1532,12 +1600,20 @@ class MainWindow(QMainWindow):
             self.status_label.setText(f"批量导出完成: {success_count}/{len(self.batch_sdf_results)} 成功")
 
             if success_count > 0:
-                QMessageBox.information(
-                    self, "导出完成",
+                # 询问是否打开文件夹
+                reply = QMessageBox.question(
+                    self,
+                    "导出完成",
                     f"批量导出完成！\n\n"
                     f"成功: {success_count}/{len(self.batch_sdf_results)}\n"
-                    f"导出位置: {export_folder}"
+                    f"导出位置: {export_folder}\n\n"
+                    f"是否要打开导出文件夹？",
+                    QMessageBox.Yes | QMessageBox.No,
+                    QMessageBox.Yes
                 )
+
+                if reply == QMessageBox.Yes:
+                    self._open_file_location(export_folder)
 
             print(f"🎉 批量导出完成: {success_count}/{len(self.batch_sdf_results)} 成功")
 

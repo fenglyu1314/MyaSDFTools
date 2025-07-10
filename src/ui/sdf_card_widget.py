@@ -128,13 +128,15 @@ class SDFCardWidget(QFrame):
     def set_sdf_preview(self, sdf_image: QPixmap):
         """设置SDF预览图"""
         if not sdf_image.isNull():
-            # 缩放到100x100，保持宽高比
+            # 缩放到80x80，保持宽高比，确保完整显示
             scaled_pixmap = sdf_image.scaled(
-                100, 100, 
-                Qt.KeepAspectRatio, 
+                80, 80,
+                Qt.KeepAspectRatio,
                 Qt.SmoothTransformation
             )
             self.sdf_preview_label.setPixmap(scaled_pixmap)
+            # 确保图像居中显示
+            self.sdf_preview_label.setAlignment(Qt.AlignCenter)
         else:
             self.sdf_preview_label.setText("预览\n失败")
     
