@@ -1,66 +1,60 @@
 # SDF工具 - 二次元脸部SDF生成工具
 
-一个专为二次元渲染设计的脸部SDF (Signed Distance Field) 生成工具，支持多角度光照图像混合和实时预览。
+专为二次元渲染设计的脸部SDF (Signed Distance Field) 生成工具，支持多角度光照图像混合和实时预览。
 
 ## ✨ 主要功能
 
-- 🖼️ **多角度SDF生成**: 支持导入多张不同角度的脸部光照图像，生成混合SDF
+- 🖼️ **多角度SDF生成**: 导入多张不同角度的脸部光照图像，生成混合SDF
 - 🎯 **单张图SDF**: 快速将单张黑白图转换为SDF格式
 - 🔄 **实时预览**: 滑竿控制光照角度，实时预览SDF效果
-- ⚡ **高性能算法**: 使用C++实现的8SSEDT算法，确保计算效率
-- 🎨 **友好界面**: 基于PySide6的现代化GUI界面
+- ⚡ **高性能算法**: 支持C++加速的8SSEDT算法
+- 🎨 **现代界面**: 基于PySide6的直观GUI界面
 - 📊 **性能监控**: 显示计算时间和性能指标
 
 ## 🛠️ 技术栈
 
-- **UI框架**: PySide6 (Python)
-- **核心算法**: C++ (8SSEDT算法)
+- **UI框架**: PySide6
 - **图像处理**: OpenCV, Pillow, NumPy
+- **核心算法**: Python + C++ (可选)
 - **构建系统**: CMake + pybind11
-- **包管理**: pip/poetry
 
 ## 📋 系统要求
 
 - Python 3.8+
-- C++17 编译器 (MSVC 2019+, GCC 9+, Clang 10+)
-- CMake 3.16+
 - 4GB+ RAM (推荐8GB)
+- C++17 编译器 (可选，用于性能加速)
 
 ## 🚀 快速开始
 
-### 新会话快速启动 🆕
-```bash
-# 快速了解项目状态和启动开发
-python quick_start.py
-```
-
-### 1. 克隆项目
+### 1. 环境准备
 
 ```bash
+# 克隆项目
 git clone <repository-url>
 cd mya_sdf_tools
-```
 
-### 2. 安装Python依赖
-
-```bash
+# 安装依赖
 pip install -r requirements.txt
 ```
 
-### 3. 编译C++扩展 (可选，提供更好性能)
+### 2. 启动应用
 
 ```bash
-# Windows (Visual Studio)
-mkdir build
-cd build
-cmake ..
-cmake --build . --config Release
+# 快速了解项目状态
+python quick_start.py
 
-# Linux/Mac
-mkdir build && cd build
-cmake ..
-make -j4
+# 启动GUI应用
+python main.py
 ```
+
+### 3. C++扩展 (可选，提升性能)
+
+```bash
+# 编译C++扩展以获得更好的性能
+python setup_cpp_extension.py build_ext --inplace
+```
+
+程序会自动检测C++扩展是否可用，如果可用会自动使用高性能的C++后端。
 
 ### 4. 运行程序
 
@@ -97,14 +91,12 @@ mya_sdf_tools/
 ├── src/                    # 源代码
 │   ├── ui/                # UI界面模块
 │   ├── core/              # 核心业务逻辑
-│   ├── cpp/               # C++算法实现
 │   └── utils/             # 工具函数
 ├── tests/                 # 测试文件
 ├── docs/                  # 文档
 ├── examples/              # 示例文件
 ├── assets/                # 资源文件
 ├── requirements.txt       # Python依赖
-├── CMakeLists.txt        # C++构建配置
 └── main.py               # 主入口文件
 ```
 
@@ -128,14 +120,6 @@ flake8 src/
 ```bash
 pytest tests/
 ```
-
-### C++开发
-
-C++核心算法位于 `src/cpp/` 目录，主要文件：
-
-- `sdf_algorithms.cpp`: 8SSEDT算法实现
-- `sdf_core.cpp`: Python接口封装
-- `bindings.cpp`: pybind11绑定代码
 
 ### Python开发
 

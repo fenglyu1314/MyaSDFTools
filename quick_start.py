@@ -88,26 +88,26 @@ def show_current_status():
 def show_quick_commands():
     """显示快速命令"""
     print("\n🚀 快速命令:")
-    print("  python test_mvp.py        # 运行MVP测试")
-    print("  python main.py            # 启动应用程序")
-    print("  python test_sdf_visual.py # 可视化测试")
-    print("  python build.py --help    # 查看构建选项")
+    print("  python tests/test_core_functionality.py  # 运行核心功能测试")
+    print("  python main.py                          # 启动应用程序")
+    print("  python tests/test_sdf_visual.py         # 可视化测试")
+    print("  python build.py --help                  # 查看构建选项")
 
 def show_important_docs():
     """显示重要文档"""
     print("\n📚 重要文档:")
+    print("  docs/用户手册.md          # 用户使用指南")
     print("  docs/项目状态报告.md      # 完整项目状态")
-    print("  docs/MVP使用说明.md       # 用户使用指南")
-    print("  docs/预览功能改进说明.md   # 最新功能说明")
     print("  docs/开发指南.md          # 开发环境指南")
+    print("  docs/MVP使用说明.md       # MVP版本说明")
     print("  README.md                # 项目概述")
 
 def show_next_steps():
     """显示下一步建议"""
     print("\n🎯 继续开发建议:")
-    print("  1. 运行 'python test_mvp.py' 验证环境")
+    print("  1. 运行 'python tests/test_core_functionality.py' 验证环境")
     print("  2. 运行 'python main.py' 体验当前功能")
-    print("  3. 查看 'docs/项目状态报告.md' 了解详细状态")
+    print("  3. 查看 'docs/用户手册.md' 了解使用方法")
     print("  4. 根据需求选择下一步开发方向:")
     print("     - C++后端集成 (性能提升)")
     print("     - 多角度功能优化")
@@ -154,7 +154,7 @@ def main():
     
     print("\n" + "=" * 60)
     print("🎉 项目准备就绪！可以开始继续开发了。")
-    print("💡 建议先运行 'python test_mvp.py' 验证功能")
+    print("💡 建议先运行 'python tests/test_core_functionality.py' 验证功能")
     print("=" * 60)
 
 if __name__ == "__main__":

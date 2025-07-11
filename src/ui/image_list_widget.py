@@ -32,57 +32,60 @@ class ImageListItem(QFrame):
         self.image_path = image_path
         self.setFrameStyle(QFrame.Box)
         self.setLineWidth(1)
-        self.setFixedHeight(80)
-        
+        self.setFixedHeight(50)  # 减少高度从80px到50px
+
         self._init_ui()
         self._load_image()
     
     def _init_ui(self):
-        """初始化UI"""
+        """初始化UI - 更紧凑的布局"""
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(5, 5, 5, 5)
-        layout.setSpacing(10)
-        
-        # 缩略图标签
+        layout.setContentsMargins(3, 3, 3, 3)  # 减少边距
+        layout.setSpacing(6)  # 减少间距
+
+        # 缩略图标签 - 更小的尺寸
         self.thumbnail_label = QLabel()
-        self.thumbnail_label.setFixedSize(64, 64)
+        self.thumbnail_label.setFixedSize(40, 40)  # 从64x64减少到40x40
         self.thumbnail_label.setScaledContents(True)
         self.thumbnail_label.setStyleSheet("""
             QLabel {
                 border: 1px solid #CCCCCC;
                 background-color: #F5F5F5;
+                border-radius: 3px;
             }
         """)
         layout.addWidget(self.thumbnail_label)
-        
-        # 信息区域
+
+        # 信息区域 - 更紧凑
         info_layout = QVBoxLayout()
-        
-        # 文件名
+        info_layout.setContentsMargins(0, 0, 0, 0)
+        info_layout.setSpacing(2)  # 减少间距
+
+        # 文件名 - 更小字体
         self.name_label = QLabel(Path(self.image_path).name)
-        self.name_label.setStyleSheet("font-weight: bold;")
+        self.name_label.setStyleSheet("font-weight: bold; font-size: 12px;")
         info_layout.addWidget(self.name_label)
-        
-        # 文件信息
+
+        # 文件信息 - 更小字体
         self.info_label = QLabel()
-        self.info_label.setStyleSheet("color: #666666; font-size: 11px;")
+        self.info_label.setStyleSheet("color: #666666; font-size: 10px;")
         info_layout.addWidget(self.info_label)
-        
+
         info_layout.addStretch()
         layout.addLayout(info_layout)
-        
+
         layout.addStretch()
-        
-        # 删除按钮
+
+        # 删除按钮 - 更小尺寸
         self.remove_btn = QPushButton("×")
-        self.remove_btn.setFixedSize(24, 24)
+        self.remove_btn.setFixedSize(18, 18)  # 从24x24减少到18x18
         self.remove_btn.setStyleSheet("""
             QPushButton {
                 background-color: #FF5722;
                 color: white;
                 border: none;
-                border-radius: 12px;
-                font-size: 16px;
+                border-radius: 9px;
+                font-size: 12px;
                 font-weight: bold;
             }
             QPushButton:hover {
@@ -195,7 +198,7 @@ class ImageListWidget(QWidget):
         
         # 添加到列表组件
         list_item = QListWidgetItem()
-        list_item.setSizeHint(QSize(0, 80))
+        list_item.setSizeHint(QSize(0, 50))  # 从80减少到50
         self.list_widget.addItem(list_item)
         self.list_widget.setItemWidget(list_item, image_item)
         

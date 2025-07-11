@@ -2,310 +2,224 @@
 # -*- coding: utf-8 -*-
 
 """
-文件操作工具
+文件工具模块 - 重构后的统一接口
 
-提供文件和目录操作的工具函数
+提供文件和目录操作的统一接口，整合各个子模块的功能
 """
 
-import os
-import shutil
-from pathlib import Path
-from typing import List, Optional, Tuple
-import json
+from typing import List, Optional, Dict, Any, Tuple
+import numpy as np
+
+from .basic_file_operations import BasicFileOperations
+from .file_dialog_manager import FileDialogManager
+from .export_manager import ExportManager
+
 
 class FileUtils:
-    """文件操作工具类"""
+    """文件工具类 - 重构后的统一接口"""
+
+    # === 基础文件操作代理方法 ===
     
     @staticmethod
     def ensure_directory(directory: str) -> bool:
-        """
-        确保目录存在，如果不存在则创建
-        
-        Args:
-            directory: 目录路径
-            
-        Returns:
-            是否成功
-        """
-        try:
-            Path(directory).mkdir(parents=True, exist_ok=True)
-            return True
-        except Exception as e:
-            print(f"创建目录失败 {directory}: {e}")
-            return False
+        """确保目录存在，如果不存在则创建"""
+        return BasicFileOperations.ensure_directory(directory)
     
     @staticmethod
     def get_file_extension(file_path: str) -> str:
         """获取文件扩展名"""
-        return Path(file_path).suffix.lower()
+        return BasicFileOperations.get_file_extension(file_path)
     
     @staticmethod
     def get_file_name_without_extension(file_path: str) -> str:
         """获取不带扩展名的文件名"""
-        return Path(file_path).stem
+        return BasicFileOperations.get_file_name_without_extension(file_path)
     
     @staticmethod
     def is_image_file(file_path: str) -> bool:
         """检查是否为图像文件"""
-        image_extensions = {'.png', '.jpg', '.jpeg', '.bmp', '.tga', '.tiff', '.webp'}
-        return FileUtils.get_file_extension(file_path) in image_extensions
+        return BasicFileOperations.is_image_file(file_path)
     
     @staticmethod
     def get_unique_filename(file_path: str) -> str:
-        """
-        获取唯一的文件名（如果文件已存在，添加数字后缀）
-        
-        Args:
-            file_path: 原始文件路径
-            
-        Returns:
-            唯一的文件路径
-        """
-        if not os.path.exists(file_path):
-            return file_path
-        
-        path = Path(file_path)
-        directory = path.parent
-        name = path.stem
-        extension = path.suffix
-        
-        counter = 1
-        while True:
-            new_name = f"{name}_{counter}{extension}"
-            new_path = directory / new_name
-            if not new_path.exists():
-                return str(new_path)
-            counter += 1
+        """获取唯一的文件名（如果文件已存在，添加数字后缀）"""
+        return BasicFileOperations.get_unique_filename(file_path)
     
     @staticmethod
     def copy_file(source: str, destination: str, overwrite: bool = False) -> bool:
-        """
-        复制文件
-        
-        Args:
-            source: 源文件路径
-            destination: 目标文件路径
-            overwrite: 是否覆盖已存在的文件
-            
-        Returns:
-            是否成功
-        """
-        try:
-            if not overwrite and os.path.exists(destination):
-                destination = FileUtils.get_unique_filename(destination)
-            
-            # 确保目标目录存在
-            FileUtils.ensure_directory(str(Path(destination).parent))
-            
-            shutil.copy2(source, destination)
-            return True
-            
-        except Exception as e:
-            print(f"复制文件失败 {source} -> {destination}: {e}")
-            return False
+        """复制文件"""
+        return BasicFileOperations.copy_file(source, destination, overwrite)
     
     @staticmethod
     def move_file(source: str, destination: str, overwrite: bool = False) -> bool:
-        """
-        移动文件
-        
-        Args:
-            source: 源文件路径
-            destination: 目标文件路径
-            overwrite: 是否覆盖已存在的文件
-            
-        Returns:
-            是否成功
-        """
-        try:
-            if not overwrite and os.path.exists(destination):
-                destination = FileUtils.get_unique_filename(destination)
-            
-            # 确保目标目录存在
-            FileUtils.ensure_directory(str(Path(destination).parent))
-            
-            shutil.move(source, destination)
-            return True
-            
-        except Exception as e:
-            print(f"移动文件失败 {source} -> {destination}: {e}")
-            return False
+        """移动文件"""
+        return BasicFileOperations.move_file(source, destination, overwrite)
     
     @staticmethod
     def delete_file(file_path: str) -> bool:
-        """
-        删除文件
-        
-        Args:
-            file_path: 文件路径
-            
-        Returns:
-            是否成功
-        """
-        try:
-            if os.path.exists(file_path):
-                os.remove(file_path)
-            return True
-        except Exception as e:
-            print(f"删除文件失败 {file_path}: {e}")
-            return False
+        """删除文件"""
+        return BasicFileOperations.delete_file(file_path)
     
     @staticmethod
     def get_file_size(file_path: str) -> int:
         """获取文件大小（字节）"""
-        try:
-            return os.path.getsize(file_path)
-        except:
-            return 0
+        return BasicFileOperations.get_file_size(file_path)
     
     @staticmethod
     def format_file_size(size_bytes: int) -> str:
         """格式化文件大小"""
-        if size_bytes < 1024:
-            return f"{size_bytes} B"
-        elif size_bytes < 1024 * 1024:
-            return f"{size_bytes / 1024:.1f} KB"
-        elif size_bytes < 1024 * 1024 * 1024:
-            return f"{size_bytes / (1024 * 1024):.1f} MB"
-        else:
-            return f"{size_bytes / (1024 * 1024 * 1024):.1f} GB"
+        return BasicFileOperations.format_file_size(size_bytes)
     
     @staticmethod
     def find_files(directory: str, pattern: str = "*", recursive: bool = True) -> List[str]:
-        """
-        查找文件
-        
-        Args:
-            directory: 搜索目录
-            pattern: 文件模式
-            recursive: 是否递归搜索
-            
-        Returns:
-            文件路径列表
-        """
-        try:
-            path = Path(directory)
-            if recursive:
-                files = list(path.rglob(pattern))
-            else:
-                files = list(path.glob(pattern))
-            
-            return [str(f) for f in files if f.is_file()]
-        except Exception as e:
-            print(f"查找文件失败 {directory}: {e}")
-            return []
+        """查找文件"""
+        return BasicFileOperations.find_files(directory, pattern, recursive)
     
     @staticmethod
     def find_image_files(directory: str, recursive: bool = True) -> List[str]:
         """查找图像文件"""
-        all_files = FileUtils.find_files(directory, "*", recursive)
-        return [f for f in all_files if FileUtils.is_image_file(f)]
+        return BasicFileOperations.find_image_files(directory, recursive)
     
     @staticmethod
     def save_json(data: dict, file_path: str, indent: int = 2) -> bool:
-        """
-        保存JSON文件
-        
-        Args:
-            data: 要保存的数据
-            file_path: 文件路径
-            indent: 缩进空格数
-            
-        Returns:
-            是否成功
-        """
-        try:
-            # 确保目录存在
-            FileUtils.ensure_directory(str(Path(file_path).parent))
-            
-            with open(file_path, 'w', encoding='utf-8') as f:
-                json.dump(data, f, indent=indent, ensure_ascii=False)
-            return True
-        except Exception as e:
-            print(f"保存JSON文件失败 {file_path}: {e}")
-            return False
+        """保存JSON文件"""
+        return BasicFileOperations.save_json(data, file_path, indent)
     
     @staticmethod
     def load_json(file_path: str) -> Optional[dict]:
-        """
-        加载JSON文件
-        
-        Args:
-            file_path: 文件路径
-            
-        Returns:
-            加载的数据或None
-        """
-        try:
-            with open(file_path, 'r', encoding='utf-8') as f:
-                return json.load(f)
-        except Exception as e:
-            print(f"加载JSON文件失败 {file_path}: {e}")
-            return None
+        """加载JSON文件"""
+        return BasicFileOperations.load_json(file_path)
     
     @staticmethod
     def get_directory_size(directory: str) -> int:
         """获取目录总大小（字节）"""
-        total_size = 0
-        try:
-            for dirpath, dirnames, filenames in os.walk(directory):
-                for filename in filenames:
-                    file_path = os.path.join(dirpath, filename)
-                    if os.path.exists(file_path):
-                        total_size += os.path.getsize(file_path)
-        except Exception as e:
-            print(f"计算目录大小失败 {directory}: {e}")
-        
-        return total_size
+        return BasicFileOperations.get_directory_size(directory)
     
     @staticmethod
     def clean_directory(directory: str, keep_subdirs: bool = True) -> bool:
-        """
-        清理目录内容
-        
-        Args:
-            directory: 目录路径
-            keep_subdirs: 是否保留子目录
-            
-        Returns:
-            是否成功
-        """
-        try:
-            if not os.path.exists(directory):
-                return True
-            
-            for item in os.listdir(directory):
-                item_path = os.path.join(directory, item)
-                
-                if os.path.isfile(item_path):
-                    os.remove(item_path)
-                elif os.path.isdir(item_path) and not keep_subdirs:
-                    shutil.rmtree(item_path)
-            
-            return True
-        except Exception as e:
-            print(f"清理目录失败 {directory}: {e}")
-            return False
+        """清理目录内容"""
+        return BasicFileOperations.clean_directory(directory, keep_subdirs)
     
     @staticmethod
     def backup_file(file_path: str, backup_suffix: str = ".bak") -> Optional[str]:
-        """
-        备份文件
-        
-        Args:
-            file_path: 原文件路径
-            backup_suffix: 备份文件后缀
+        """备份文件"""
+        return BasicFileOperations.backup_file(file_path, backup_suffix)
+
+    # === 文件对话框代理方法 ===
+    
+    @staticmethod
+    def select_image_files(parent=None, title: str = "选择图像文件") -> List[str]:
+        """选择图像文件"""
+        return FileDialogManager.select_image_files(parent, title)
+    
+    @staticmethod
+    def select_single_image_file(parent=None, title: str = "选择图像文件") -> Optional[str]:
+        """选择单个图像文件"""
+        return FileDialogManager.select_single_image_file(parent, title)
+    
+    @staticmethod
+    def save_file_dialog(parent=None, 
+                        title: str = "保存文件", 
+                        default_name: str = "output",
+                        file_type: str = "png") -> Optional[str]:
+        """保存文件对话框"""
+        return FileDialogManager.save_file_dialog(parent, title, default_name, file_type)
+    
+    @staticmethod
+    def select_directory(parent=None, title: str = "选择目录") -> Optional[str]:
+        """选择目录"""
+        return FileDialogManager.select_directory(parent, title)
+    
+    @staticmethod
+    def get_file_info(file_path: str) -> dict:
+        """获取文件信息"""
+        return FileDialogManager.get_file_info(file_path)
+    
+    @staticmethod
+    def validate_file_path(file_path: str, must_exist: bool = True) -> Tuple[bool, str]:
+        """验证文件路径"""
+        return FileDialogManager.validate_file_path(file_path, must_exist)
+
+    # === 导出功能代理方法 ===
+    
+    @staticmethod
+    def export_sdf_image(sdf_array: np.ndarray, 
+                        file_path: str, 
+                        format_type: str = "png",
+                        normalize: bool = True) -> bool:
+        """导出SDF为图像文件"""
+        return ExportManager.export_sdf_image(sdf_array, file_path, format_type, normalize)
+    
+    @staticmethod
+    def export_sdf_data(sdf_array: np.ndarray, 
+                       file_path: str, 
+                       format_type: str = "npy",
+                       metadata: Optional[Dict[str, Any]] = None) -> bool:
+        """导出SDF数据文件"""
+        return ExportManager.export_sdf_data(sdf_array, file_path, format_type, metadata)
+    
+    @staticmethod
+    def export_batch_images(sdf_list: List[np.ndarray], 
+                           output_directory: str,
+                           base_name: str = "sdf",
+                           format_type: str = "png") -> List[str]:
+        """批量导出SDF图像"""
+        return ExportManager.export_batch_images(sdf_list, output_directory, base_name, format_type)
+    
+    @staticmethod
+    def export_with_dialog(sdf_array: np.ndarray, 
+                          parent=None,
+                          default_name: str = "sdf_output") -> Optional[str]:
+        """使用对话框导出SDF"""
+        return ExportManager.export_with_dialog(sdf_array, parent, default_name)
+    
+    @staticmethod
+    def open_export_folder(file_path: str) -> bool:
+        """打开导出文件所在的文件夹"""
+        return ExportManager.open_export_folder(file_path)
+    
+    @staticmethod
+    def validate_export_path(file_path: str) -> Tuple[bool, str]:
+        """验证导出路径"""
+        return ExportManager.validate_export_path(file_path)
+    
+    @staticmethod
+    def get_export_formats() -> Dict[str, str]:
+        """获取支持的导出格式"""
+        return ExportManager.get_export_formats()
+
+    # === 便捷方法 ===
+    
+    @staticmethod
+    def quick_export_sdf(sdf_array: np.ndarray, 
+                        output_dir: str = "output",
+                        base_name: str = "sdf") -> Optional[str]:
+        """快速导出SDF（自动生成文件名）"""
+        try:
+            FileUtils.ensure_directory(output_dir)
             
-        Returns:
-            备份文件路径或None
-        """
-        if not os.path.exists(file_path):
+            # 生成唯一文件名
+            file_path = f"{output_dir}/{base_name}.png"
+            file_path = FileUtils.get_unique_filename(file_path)
+            
+            # 导出图像
+            if FileUtils.export_sdf_image(sdf_array, file_path):
+                return file_path
+            else:
+                return None
+                
+        except Exception as e:
+            print(f"❌ 快速导出失败: {e}")
             return None
-        
-        backup_path = file_path + backup_suffix
-        backup_path = FileUtils.get_unique_filename(backup_path)
-        
-        if FileUtils.copy_file(file_path, backup_path):
-            return backup_path
-        
-        return None
+    
+    @staticmethod
+    def get_supported_image_extensions() -> List[str]:
+        """获取支持的图像扩展名"""
+        return ['.png', '.jpg', '.jpeg', '.bmp', '.tga', '.tiff', '.webp']
+    
+    @staticmethod
+    def is_supported_export_format(file_path: str) -> bool:
+        """检查是否为支持的导出格式"""
+        extension = FileUtils.get_file_extension(file_path)
+        supported = {'.png', '.jpg', '.jpeg', '.bmp', '.tiff', '.npy', '.npz', '.json'}
+        return extension in supported
