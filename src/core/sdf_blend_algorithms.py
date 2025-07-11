@@ -17,19 +17,13 @@ import numpy as np
 class SDFBlendAlgorithms:
     """SDF混合算法实现"""
 
-    def __init__(self, cpp_interface=None):
-        """
-        初始化混合算法
-
-        Args:
-            cpp_interface: C++接口实例，用于C++后端混合
-        """
-        self.cpp_interface = cpp_interface
+    def __init__(self):
+        """初始化混合算法"""
+        pass
 
     def blend_multiple_sdfs(self, sdf_images: List[np.ndarray],
                            angles: List[float],
-                           blend_mode: str = "sdf_blend",
-                           use_cpp_backend: bool = True) -> np.ndarray:
+                           blend_mode: str = "sdf_blend") -> np.ndarray:
         """
         混合多个SDF图像
 
@@ -40,7 +34,6 @@ class SDFBlendAlgorithms:
             sdf_images: SDF图像列表
             angles: 对应的角度列表 (保留参数兼容性，但不影响混合结果)
             blend_mode: 混合模式 (固定为sdf_blend)
-            use_cpp_backend: 是否使用C++后端
 
         Returns:
             混合后的SDF
@@ -61,18 +54,8 @@ class SDFBlendAlgorithms:
         if len(sdf_images) == 1:
             return sdf_images[0].copy()
 
-        # 使用SDF特性混合 (唯一支持的混合模式)
-        if (use_cpp_backend and self.cpp_interface and self.cpp_interface.is_available()
-            and hasattr(self.cpp_interface.cpp_backend, 'blend_multiple_sdfs')):
-            # 使用C++后端混合
-            try:
-                return self.cpp_interface.blend_multiple_sdfs_cpp(sdf_images)
-            except Exception as e:
-                print(f"⚠️ C++混合失败，回退到Python实现: {e}")
-                return self.blend_sdf_pairwise(sdf_images, angles)
-        else:
-            # 使用Python实现
-            return self.blend_sdf_pairwise(sdf_images, angles)
+        # 使用SDF特性混合 (Python实现)
+        return self.blend_sdf_pairwise(sdf_images, angles)
 
     def blend_sdf_pairwise(self, sdf_images: List[np.ndarray], angles: List[float]) -> np.ndarray:
         """

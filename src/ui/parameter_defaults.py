@@ -20,8 +20,7 @@ class ParameterDefaults:
         'invert': False,
         'blend_mode': 'sdf_blend',
         'sdf_direction': 'both',
-        'max_distance': 100,
-        'use_cpp_backend': True
+        'max_distance': 100
     }
 
     # 参数范围定义

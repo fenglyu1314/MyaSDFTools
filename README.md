@@ -91,14 +91,12 @@ mya_sdf_tools/
 ├── src/                    # 源代码
 │   ├── ui/                # UI界面模块
 │   ├── core/              # 核心业务逻辑
-│   ├── cpp/               # C++算法实现
 │   └── utils/             # 工具函数
 ├── tests/                 # 测试文件
 ├── docs/                  # 文档
 ├── examples/              # 示例文件
 ├── assets/                # 资源文件
 ├── requirements.txt       # Python依赖
-├── CMakeLists.txt        # C++构建配置
 └── main.py               # 主入口文件
 ```
 
@@ -122,14 +120,6 @@ flake8 src/
 ```bash
 pytest tests/
 ```
-
-### C++开发
-
-C++核心算法位于 `src/cpp/` 目录，主要文件：
-
-- `sdf_algorithms.cpp`: 8SSEDT算法实现
-- `sdf_core.cpp`: Python接口封装
-- `bindings.cpp`: pybind11绑定代码
 
 ### Python开发
 

@@ -126,9 +126,8 @@ def main():
             import src
             version_info = src.get_version_info()
             print(f"SDF工具 v{version_info['version']}")
-            print(f"C++扩展: {'已启用' if version_info['cpp_extension'] else '未启用'}")
-            if 'cpp_version' in version_info:
-                print(f"C++版本: {version_info['cpp_version']}")
+            print(f"后端: {version_info['backend']}")
+            print(f"描述: {version_info['description']}")
         except:
             print("SDF工具 v0.1.0")
         return 0

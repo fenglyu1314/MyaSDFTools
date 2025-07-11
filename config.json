@@ -1,0 +1,26 @@
+{
+    "ui": {
+        "window_width": 1600,
+        "window_height": 900,
+        "theme": "auto",
+        "language": "zh_CN",
+        "remember_window_state": true
+    },
+    "sdf": {
+        "default_threshold": 0.5,
+        "normalize_output": true,
+        "num_threads": 0,
+        "algorithm": "8ssedt"
+    },
+    "export": {
+        "default_format": "png",
+        "quality": 95,
+        "compression": 6,
+        "bit_depth": 16
+    },
+    "performance": {
+        "cache_size": 100,
+        "max_image_size": 4096,
+        "enable_multithreading": true
+    }
+}

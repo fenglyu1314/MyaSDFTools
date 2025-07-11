@@ -114,63 +114,7 @@ def install_python_deps():
         print("✗ Python依赖安装失败")
         return False
 
-def build_cpp_extension(build_type="Release"):
-    """编译C++扩展模块"""
-    print(f"编译C++扩展模块 ({build_type})...")
-    
-    # 创建构建目录
-    build_dir = Path("build")
-    if build_dir.exists():
-        shutil.rmtree(build_dir)
-    build_dir.mkdir()
-    
-    # 配置CMake
-    cmake_args = [
-        "cmake",
-        "..",
-        f"-DCMAKE_BUILD_TYPE={build_type}"
-    ]
-    
-    if sys.platform == "win32":
-        cmake_args.extend([
-            "-A", "x64",  # 64位构建
-            "-T", "host=x64"
-        ])
-    
-    cmd = " ".join(cmake_args)
-    result = run_command(cmd, cwd=build_dir, check=False)
-    
-    if result.returncode != 0:
-        print("✗ CMake配置失败")
-        return False
-    
-    # 编译
-    cmd = f"cmake --build . --config {build_type} --parallel"
-    result = run_command(cmd, cwd=build_dir, check=False)
-    
-    if result.returncode != 0:
-        print("✗ C++编译失败")
-        return False
-    
-    print("✓ C++扩展模块编译成功")
-    
-    # 复制编译结果到src目录
-    if sys.platform == "win32":
-        src_file = build_dir / build_type / "sdf_core.pyd"
-        if not src_file.exists():
-            src_file = build_dir / "sdf_core.pyd"
-    else:
-        src_file = build_dir / "sdf_core.so"
-    
-    if src_file.exists():
-        dst_file = Path("src") / src_file.name
-        shutil.copy2(src_file, dst_file)
-        print(f"✓ 扩展模块已复制到 {dst_file}")
-    else:
-        print("✗ 找不到编译后的扩展模块")
-        return False
-    
-    return True
+
 
 def run_tests():
     """运行测试"""
@@ -233,7 +177,7 @@ def clean_build():
     print("清理构建文件...")
     
     dirs_to_clean = ["build", "dist", "__pycache__", "*.egg-info"]
-    files_to_clean = ["src/sdf_core.pyd", "src/sdf_core.so"]
+    files_to_clean = []
     
     for dir_pattern in dirs_to_clean:
         for path in Path(".").glob(f"**/{dir_pattern}"):
@@ -253,7 +197,7 @@ def main():
     parser = argparse.ArgumentParser(description="SDF工具构建脚本")
     parser.add_argument("--clean", action="store_true", help="清理构建文件")
     parser.add_argument("--deps", action="store_true", help="安装Python依赖")
-    parser.add_argument("--cpp", action="store_true", help="编译C++扩展")
+
     parser.add_argument("--test", action="store_true", help="运行测试")
     parser.add_argument("--package", action="store_true", help="打包应用程序")
     parser.add_argument("--all", action="store_true", help="执行完整构建流程")
@@ -265,7 +209,7 @@ def main():
         clean_build()
         return
     
-    if not any([args.deps, args.cpp, args.test, args.package, args.all]):
+    if not any([args.deps, args.test, args.package, args.all]):
         parser.print_help()
         return
     
@@ -279,8 +223,7 @@ def main():
     if args.all or args.deps:
         success &= install_python_deps()
     
-    if args.all or args.cpp:
-        success &= build_cpp_extension(args.build_type)
+
     
     if args.all or args.test:
         success &= run_tests()

@@ -29,7 +29,6 @@ class SDFConfig:
     normalize_output: bool = True
     num_threads: int = 0  # 0表示自动检测
     algorithm: str = "8ssedt"
-    use_cpp_backend: bool = True
 
 @dataclass
 class PreviewConfig:

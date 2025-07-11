@@ -17,7 +17,6 @@ import numpy as np
 
 from .sdf_core_algorithm import SDFCoreAlgorithm
 from .sdf_blend_algorithms import SDFBlendAlgorithms
-from .sdf_cpp_interface import SDFCppInterface
 
 
 class SDFGenerator:
@@ -29,11 +28,10 @@ class SDFGenerator:
     def __init__(self):
         """初始化SDF生成器"""
         self.last_computation_time = 0.0
-        
+
         # 初始化各个模块
         self.core_algorithm = SDFCoreAlgorithm()
-        self.cpp_interface = SDFCppInterface()
-        self.blend_algorithms = SDFBlendAlgorithms(self.cpp_interface)
+        self.blend_algorithms = SDFBlendAlgorithms()
 
     def compute_single_sdf(self,
                           image_path: str,
@@ -42,8 +40,7 @@ class SDFGenerator:
                           invert: bool = False,
                           sdf_direction: str = "both",
                           max_distance: int = 100,
-                          num_threads: Optional[int] = None,
-                          use_cpp_backend: bool = True) -> Tuple[np.ndarray, float]:
+                          num_threads: Optional[int] = None) -> Tuple[np.ndarray, float]:
         """
         计算单张图像的SDF
         
@@ -64,21 +61,11 @@ class SDFGenerator:
         try:
             # 加载和预处理图像
             image_data = self.core_algorithm.load_and_preprocess_image(image_path, threshold)
-            
-            # 设置后端选择
-            self.cpp_interface.set_use_cpp_backend(use_cpp_backend)
 
-            # 选择计算后端
-            if self.cpp_interface.is_available() and use_cpp_backend:
-                # 使用C++后端
-                sdf_result = self.cpp_interface.compute_sdf_cpp(
-                    image_data, normalize, invert, sdf_direction, max_distance, num_threads
-                )
-            else:
-                # 使用Python实现
-                sdf_result = self.core_algorithm.compute_sdf_python(
-                    image_data, normalize, invert, sdf_direction, max_distance
-                )
+            # 使用Python实现计算SDF
+            sdf_result = self.core_algorithm.compute_sdf_python(
+                image_data, normalize, invert, sdf_direction, max_distance
+            )
             
             computation_time = time.time() - start_time
             self.last_computation_time = computation_time
@@ -97,8 +84,7 @@ class SDFGenerator:
                          blend_mode: str = "sdf_blend",
                          sdf_direction: str = "both",
                          max_distance: int = 100,
-                         num_threads: Optional[int] = None,
-                         use_cpp_backend: bool = True) -> Tuple[np.ndarray, float]:
+                         num_threads: Optional[int] = None) -> Tuple[np.ndarray, float]:
         """
         计算多张图像的混合SDF
 
@@ -112,7 +98,7 @@ class SDFGenerator:
             sdf_direction: SDF计算方向 ("both", "inside", "outside")
             max_distance: 最大距离限制 (像素)
             num_threads: 线程数 (None表示自动)
-            use_cpp_backend: 是否使用C++后端
+
 
         Returns:
             (mixed_sdf_result, computation_time)
@@ -133,12 +119,12 @@ class SDFGenerator:
             sdf_images = []
             for image_path in image_paths:
                 sdf_result, _ = self.compute_single_sdf(
-                    image_path, threshold, normalize, invert, sdf_direction, max_distance, num_threads, use_cpp_backend
+                    image_path, threshold, normalize, invert, sdf_direction, max_distance, num_threads
                 )
                 sdf_images.append(sdf_result)
-            
+
             # 混合多个SDF
-            mixed_sdf = self.blend_algorithms.blend_multiple_sdfs(sdf_images, angles, blend_mode, use_cpp_backend)
+            mixed_sdf = self.blend_algorithms.blend_multiple_sdfs(sdf_images, angles, blend_mode)
             
             computation_time = time.time() - start_time
             self.last_computation_time = computation_time
@@ -177,16 +163,11 @@ class SDFGenerator:
         """获取版本信息"""
         info = {
             'python_version': '0.2.0',
-            'backend': 'C++' if self.cpp_interface.is_available() else 'Python',
+            'backend': 'Python',
             'algorithms': ['8SSEDT', 'OpenCV Distance Transform'],
-            'blend_modes': ['weighted', 'sdf_blend', 'average', 'max', 'min']
+            'blend_modes': ['sdf_blend']
         }
-        
-        # 添加C++后端信息
-        if self.cpp_interface.is_available():
-            cpp_info = self.cpp_interface.get_version_info()
-            info['cpp_backend'] = cpp_info
-        
+
         return info
 
     def get_performance_info(self) -> Dict[str, Any]:
@@ -211,29 +192,5 @@ class SDFGenerator:
                 'algorithms': ['OpenCV Distance Transform', 'Improved SDF']
             }
         }
-        
-        # 验证C++后端
-        if self.cpp_interface.is_available():
-            cpp_validation = self.cpp_interface.validate_cpp_backend()
-            validation_info['cpp_backend'] = cpp_validation
-        else:
-            validation_info['cpp_backend'] = {
-                'available': False,
-                'error': 'C++后端不可用'
-            }
-        
+
         return validation_info
-
-    def set_backend_preference(self, prefer_cpp: bool = True):
-        """设置后端偏好"""
-        # 这个方法可以用于将来扩展后端选择逻辑
-        pass
-
-    def cleanup(self):
-        """清理资源"""
-        if self.cpp_interface:
-            self.cpp_interface.cleanup()
-
-    def __del__(self):
-        """析构函数"""
-        self.cleanup()

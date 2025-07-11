@@ -72,9 +72,16 @@ class SignalConnectionManager:
         self.event_handler.status_updated.connect(self._update_status)
         self.event_handler.ui_state_changed.connect(self._update_ui_state)
         self.event_handler.sdf_generated.connect(self._handle_sdf_generated)
+        self.event_handler.progress_updated.connect(self._handle_progress_updated)
 
     def _handle_generate_sdf(self):
         """处理生成SDF"""
+        # 显示进度条
+        progress_bar = self.components.get('progress_bar')
+        if progress_bar:
+            progress_bar.setVisible(True)
+            progress_bar.setValue(0)
+
         parameters = self.components['parameter_widget'].get_sdf_params()
         self.event_handler.handle_generate_sdf(parameters)
 
@@ -214,6 +221,17 @@ class SignalConnectionManager:
 
     def _handle_sdf_generated(self, sdf_result, computation_time):
         """处理SDF生成完成 - 安全地更新时间显示"""
+        # 隐藏进度条
+        progress_bar = self.components.get('progress_bar')
+        if progress_bar:
+            progress_bar.setVisible(False)
+
         time_label = self.components.get('time_label')
         if time_label:
             time_label.setText(f"计算时间: {computation_time:.2f}s")
+
+    def _handle_progress_updated(self, progress: int):
+        """处理进度更新"""
+        progress_bar = self.components.get('progress_bar')
+        if progress_bar:
+            progress_bar.setValue(progress)

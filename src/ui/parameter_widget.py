@@ -60,31 +60,7 @@ class ParameterWidget(QWidget):
         threshold_layout.addWidget(self.threshold_spinbox)
         layout.addRow("阈值:", threshold_layout)
 
-        # 选项设置
-        options_layout = QHBoxLayout()
-        self.normalize_checkbox = QCheckBox("归一化")
-        self.normalize_checkbox.setChecked(True)
-        options_layout.addWidget(self.normalize_checkbox)
 
-        self.invert_checkbox = QCheckBox("反转")
-        self.invert_checkbox.setChecked(False)
-        options_layout.addWidget(self.invert_checkbox)
-        layout.addRow("选项:", options_layout)
-
-        # SDF计算方向
-        self.sdf_direction_combo = QComboBox()
-        direction_options = ParameterDefaults.get_sdf_direction_options()
-        for value, display in direction_options:
-            self.sdf_direction_combo.addItem(display, value)
-        layout.addRow("计算方向:", self.sdf_direction_combo)
-
-        # 混合模式 - 隐藏控件，因为只有一个选项
-        self.blend_mode_combo = QComboBox()
-        blend_options = ParameterDefaults.get_blend_mode_options()
-        for value, display in blend_options:
-            self.blend_mode_combo.addItem(display, value)
-        # 不添加到布局中，因为只有一个选项，用户无需选择
-        # layout.addRow("混合模式:", self.blend_mode_combo)
 
     def _create_advanced_parameters(self, layout: QFormLayout):
         """创建高级参数控件"""
@@ -102,10 +78,7 @@ class ParameterWidget(QWidget):
         max_distance_layout.addWidget(self.max_distance_spinbox)
         layout.addRow("最大距离:", max_distance_layout)
 
-        # 后端选择
-        self.use_cpp_checkbox = QCheckBox("使用C++后端")
-        self.use_cpp_checkbox.setChecked(True)
-        layout.addRow("后端:", self.use_cpp_checkbox)
+
 
     def _connect_signals(self):
         """连接信号"""
@@ -119,12 +92,8 @@ class ParameterWidget(QWidget):
         
         # 参数变化信号
         self.threshold_spinbox.valueChanged.connect(self.parameters_changed.emit)
-        self.normalize_checkbox.toggled.connect(self.parameters_changed.emit)
-        self.invert_checkbox.toggled.connect(self.parameters_changed.emit)
-        self.sdf_direction_combo.currentTextChanged.connect(self.parameters_changed.emit)
-        self.blend_mode_combo.currentTextChanged.connect(self.parameters_changed.emit)
         self.max_distance_spinbox.valueChanged.connect(self.parameters_changed.emit)
-        self.use_cpp_checkbox.toggled.connect(self.parameters_changed.emit)
+
 
     def _on_threshold_slider_changed(self, value):
         """阈值滑竿变化"""
@@ -155,43 +124,30 @@ class ParameterWidget(QWidget):
     def _load_default_parameters(self):
         """加载默认参数"""
         defaults = ParameterDefaults.get_all_defaults()
-        
+
         # 设置默认值
         self.threshold_spinbox.setValue(defaults.get('threshold', 0.5))
-        self.normalize_checkbox.setChecked(defaults.get('normalize', True))
-        self.invert_checkbox.setChecked(defaults.get('invert', False))
         self.max_distance_spinbox.setValue(defaults.get('max_distance', 100))
-        self.use_cpp_checkbox.setChecked(defaults.get('use_cpp_backend', True))
-        
-        # 设置组合框默认值
-        self._set_combo_default(self.sdf_direction_combo, defaults.get('sdf_direction', 'both'))
-        self._set_combo_default(self.blend_mode_combo, defaults.get('blend_mode', 'sdf_blend'))
 
-    def _set_combo_default(self, combo: QComboBox, value: str):
-        """设置组合框默认值"""
-        for i in range(combo.count()):
-            if combo.itemData(i) == value:
-                combo.setCurrentIndex(i)
-                break
+
 
     def get_sdf_params(self) -> Dict[str, Any]:
         """获取SDF参数"""
         params = {
             'threshold': self.threshold_spinbox.value(),
-            'normalize': self.normalize_checkbox.isChecked(),
-            'invert': self.invert_checkbox.isChecked(),
-            'sdf_direction': self.sdf_direction_combo.currentData(),
-            'blend_mode': self.blend_mode_combo.currentData(),
-            'max_distance': self.max_distance_spinbox.value(),
-            'use_cpp_backend': self.use_cpp_checkbox.isChecked()
+            'normalize': True,  # 固定为True
+            'invert': False,    # 固定为False
+            'sdf_direction': 'both',  # 固定为双向计算
+            'blend_mode': 'sdf_blend',  # 固定为SDF混合
+            'max_distance': self.max_distance_spinbox.value()
         }
-        
+
         # 验证参数
         is_valid, errors = self.validator.validate_all_parameters(params)
         if not is_valid:
             print(f"⚠️ 参数验证失败: {errors}")
             params = self.validator.sanitize_parameters(params)
-        
+
         return params
 
     def set_parameters(self, params: Dict[str, Any]):
@@ -205,18 +161,8 @@ class ParameterWidget(QWidget):
         try:
             if 'threshold' in params:
                 self.threshold_spinbox.setValue(params['threshold'])
-            if 'normalize' in params:
-                self.normalize_checkbox.setChecked(params['normalize'])
-            if 'invert' in params:
-                self.invert_checkbox.setChecked(params['invert'])
             if 'max_distance' in params:
                 self.max_distance_spinbox.setValue(params['max_distance'])
-            if 'use_cpp_backend' in params:
-                self.use_cpp_checkbox.setChecked(params['use_cpp_backend'])
-            if 'sdf_direction' in params:
-                self._set_combo_default(self.sdf_direction_combo, params['sdf_direction'])
-            if 'blend_mode' in params:
-                self._set_combo_default(self.blend_mode_combo, params['blend_mode'])
         finally:
             self.blockSignals(False)
             self.parameters_changed.emit()

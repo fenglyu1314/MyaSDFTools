@@ -26,15 +26,13 @@ class ImageCardWidget(QFrame):
     """图像卡片组件"""
     
     # 信号定义
-    angle_changed = Signal(str, int)  # 图像路径, 新角度
     remove_requested = Signal(str)   # 图像路径
-    
-    def __init__(self, image_path: str, angle: int = 0, parent=None):
+
+    def __init__(self, image_path: str, parent=None):
         super().__init__(parent)
         self.image_path = image_path
-        self.angle = angle
 
-        self.setFixedSize(110, 160)  # 缩小卡片尺寸避免重叠
+        self.setFixedSize(110, 130)  # 删除角度后减少高度
         self.setFrameStyle(QFrame.Box)
         self.setLineWidth(1)
         self.setStyleSheet("""
@@ -87,33 +85,7 @@ class ImageCardWidget(QFrame):
         """)
         layout.addWidget(self.filename_label)
 
-        # 角度输入区域
-        angle_layout = QHBoxLayout()
-        angle_layout.setContentsMargins(0, 0, 0, 0)
-        angle_layout.setSpacing(3)
 
-        angle_label = QLabel("角度:")
-        angle_label.setFixedHeight(18)  # 固定高度
-        angle_label.setStyleSheet("font-size: 10px; color: #666666;")
-        angle_layout.addWidget(angle_label)
-
-        self.angle_spinbox = QSpinBox()
-        self.angle_spinbox.setRange(0, 359)
-        self.angle_spinbox.setValue(self.angle)
-        self.angle_spinbox.setSuffix("°")
-        self.angle_spinbox.setFixedWidth(60)
-        self.angle_spinbox.setFixedHeight(18)  # 减少高度
-        self.angle_spinbox.setStyleSheet("""
-            QSpinBox {
-                font-size: 10px;
-                border: 1px solid #CCCCCC;
-                border-radius: 2px;
-                padding: 2px;
-            }
-        """)
-        angle_layout.addWidget(self.angle_spinbox)
-
-        layout.addLayout(angle_layout)
         
         # 删除按钮 - 改为更小的按钮
         self.remove_btn = QPushButton("删除")
@@ -137,7 +109,6 @@ class ImageCardWidget(QFrame):
         layout.addWidget(self.remove_btn, 0, Qt.AlignHCenter)
         
         # 连接信号
-        self.angle_spinbox.valueChanged.connect(self._on_angle_changed)
         self.remove_btn.clicked.connect(self._on_remove_clicked)
     
     def _load_thumbnail(self):
@@ -172,25 +143,9 @@ class ImageCardWidget(QFrame):
                 }
             """)
     
-    def _on_angle_changed(self, value):
-        """角度改变处理"""
-        self.angle = value
-        self.angle_changed.emit(self.image_path, value)
-    
     def _on_remove_clicked(self):
         """删除按钮点击处理"""
         self.remove_requested.emit(self.image_path)
-    
-    def get_angle(self) -> int:
-        """获取当前角度"""
-        return self.angle_spinbox.value()
-    
-    def set_angle(self, angle: int):
-        """设置角度"""
-        self.angle_spinbox.blockSignals(True)
-        self.angle_spinbox.setValue(angle)
-        self.angle = angle
-        self.angle_spinbox.blockSignals(False)
     
     def get_image_path(self) -> str:
         """获取图像路径"""
@@ -202,7 +157,6 @@ class ImageCardsContainer(QWidget):
     
     # 信号定义
     images_changed = Signal()  # 图像列表改变
-    angle_changed = Signal(str, int)  # 图像角度改变
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -218,7 +172,7 @@ class ImageCardsContainer(QWidget):
         #self.layout.setSpacing(10)  # 增加间距避免重叠
         self.layout.setAlignment(Qt.AlignLeft | Qt.AlignTop)  # 左对齐并顶部对齐
     
-    def add_image(self, image_path: str, angle: int = None) -> bool:
+    def add_image(self, image_path: str) -> bool:
         """添加图像卡片"""
         # 检查数量限制
         if len(self.image_cards) >= self.max_images:
@@ -231,17 +185,13 @@ class ImageCardsContainer(QWidget):
                 print(f"⚠️ 图像卡片已存在: {image_path}")
                 return False
 
-        # 创建图像卡片，先使用临时角度0
-        card = ImageCardWidget(image_path, 0)
-        card.angle_changed.connect(self.angle_changed.emit)
+        # 创建图像卡片
+        card = ImageCardWidget(image_path)
         card.remove_requested.connect(self._remove_image)
 
         # 添加到布局
         self.layout.insertWidget(len(self.image_cards), card)
         self.image_cards.append(card)
-
-        # 重新分配所有角度
-        self._redistribute_angles()
 
         self.images_changed.emit()
         print(f"✅ 成功添加图像卡片: {image_path}")
@@ -258,26 +208,14 @@ class ImageCardsContainer(QWidget):
                 # 从列表中移除
                 self.image_cards.pop(i)
                 
-                # 重新分配角度
-                self._redistribute_angles()
+
                 
                 self.images_changed.emit()
                 break
     
 
     
-    def _redistribute_angles(self):
-        """重新分配所有角度 - 180度均匀分布"""
-        count = len(self.image_cards)
-        if count == 0:
-            return
 
-        for i, card in enumerate(self.image_cards):
-            if count == 1:
-                angle = 0
-            else:
-                angle = int(180 / count * i)
-            card.set_angle(angle)
     
     def clear(self):
         """清空所有图像卡片"""
@@ -290,7 +228,7 @@ class ImageCardsContainer(QWidget):
     
     def get_images_data(self) -> list:
         """获取所有图像数据"""
-        return [(card.get_image_path(), card.get_angle()) for card in self.image_cards]
+        return [card.get_image_path() for card in self.image_cards]
     
     def get_image_count(self) -> int:
         """获取图像数量"""

@@ -122,6 +122,7 @@ class MainWindowEventHandler(QObject):
     sdf_generated = Signal(object, float)
     single_sdf_completed = Signal(str, object, float)  # image_path, sdf_result, computation_time
     merged_sdf_updated = Signal(object)  # merged_sdf_result
+    progress_updated = Signal(int)  # progress_value
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -161,6 +162,7 @@ class MainWindowEventHandler(QObject):
         self.sdf_worker.error.connect(self._on_sdf_error)
         self.sdf_worker.single_sdf_completed.connect(self._on_single_sdf_completed)
         self.sdf_worker.merged_sdf_updated.connect(self._on_merged_sdf_updated)
+        self.sdf_worker.progress.connect(self._on_progress_updated)
         
         # 启动线程
         self.sdf_worker.start()
@@ -283,6 +285,11 @@ class MainWindowEventHandler(QObject):
         print(f"🔄 合并SDF更新")
         # 转发信号给UI
         self.merged_sdf_updated.emit(merged_sdf)
+
+    def _on_progress_updated(self, progress: int):
+        """进度更新回调"""
+        # 转发信号给UI
+        self.progress_updated.emit(progress)
 
     def _export_sdf_to_file(self, file_path: str):
         """导出SDF到文件"""
