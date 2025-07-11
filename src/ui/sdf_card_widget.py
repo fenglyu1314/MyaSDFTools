@@ -218,20 +218,52 @@ class SDFCardsContainer(QWidget):
         """根据图像数据更新SDF卡片"""
         # 获取当前图像路径列表
         current_image_paths = [data[0] for data in images_data]
-        
+
         # 移除不再存在的卡片
         cards_to_remove = []
         for card in self.sdf_cards:
             if card.get_image_path() not in current_image_paths:
                 cards_to_remove.append(card.get_image_path())
-        
+
         for image_path in cards_to_remove:
             self.remove_sdf_card(image_path)
-        
+
         # 添加新的卡片
         for image_path, angle in images_data:
             if not self.get_sdf_card(image_path):
                 self.add_sdf_card(image_path)
+
+        # 重新排列卡片顺序以匹配images_data的顺序
+        self._rearrange_cards_by_order(current_image_paths)
+
+    def _rearrange_cards_by_order(self, desired_order: list):
+        """根据指定顺序重新排列卡片"""
+        if not desired_order:
+            return
+
+        # 创建一个按新顺序排列的卡片列表
+        new_card_order = []
+        for image_path in desired_order:
+            card = self.get_sdf_card(image_path)
+            if card:
+                new_card_order.append(card)
+
+        # 如果顺序没有变化，直接返回
+        if new_card_order == self.sdf_cards:
+            return
+
+        # 从布局中移除所有卡片
+        for card in self.sdf_cards:
+            self.layout.removeWidget(card)
+
+        # 按新顺序重新添加到布局
+        for i, card in enumerate(new_card_order):
+            self.layout.insertWidget(i, card)
+
+        # 更新卡片列表
+        self.sdf_cards = new_card_order
+
+        print(f"🔄 SDF卡片重新排序: {[Path(card.get_image_path()).name for card in self.sdf_cards]}")
     
     def get_card_count(self) -> int:
         """获取卡片数量"""

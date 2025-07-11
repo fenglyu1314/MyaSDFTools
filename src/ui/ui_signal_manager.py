@@ -8,6 +8,7 @@ UI信号管理器模块
 """
 
 import sys
+from pathlib import Path
 from PySide6.QtWidgets import QMessageBox
 
 
@@ -64,6 +65,8 @@ class SignalConnectionManager:
                 image_cards_container.images_changed.connect(self._handle_images_changed)
             if hasattr(image_cards_container, 'image_remove_requested'):
                 image_cards_container.image_remove_requested.connect(self.event_handler.handle_remove_image)
+            if hasattr(image_cards_container, 'image_order_changed'):
+                image_cards_container.image_order_changed.connect(self.event_handler.handle_image_order_changed)
         
         # 参数组件信号
         parameter_widget = self.components.get('parameter_widget')
@@ -208,6 +211,13 @@ class SignalConnectionManager:
                 image_cards_container._remove_image(existing_path)
                 print(f"🗑️ 移除图像卡片: {existing_path}")
 
+        # 同步UI中的图像顺序到后端（如果UI中的顺序与后端不同）
+        ui_order = image_cards_container.get_current_image_order()
+        if ui_order != current_images and len(ui_order) == len(current_images):
+            # UI中的顺序与后端不同，以UI为准更新后端
+            self.event_handler.current_images = ui_order.copy()
+            print(f"🔄 同步UI顺序到后端: {[Path(p).name for p in ui_order]}")
+
         # 调试信息
         print(f"🔄 UI状态同步: 后端{len(current_images)}张图像 → UI{len(image_cards_container.image_cards)}张卡片")
 
@@ -220,6 +230,7 @@ class SignalConnectionManager:
         # 根据当前图像更新SDF卡片
         current_images = self.event_handler.current_images
         images_data = [(path, 0) for path in current_images]  # 角度暂时设为0
+        print(f"🔄 更新SDF卡片顺序: {[Path(p).name for p in current_images]}")
         sdf_cards_container.update_cards_from_images(images_data)
 
     def _handle_sdf_generated(self, sdf_result, computation_time):

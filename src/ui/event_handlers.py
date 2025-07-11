@@ -230,6 +230,15 @@ class MainWindowEventHandler(QObject):
             self.status_updated.emit(f"已删除图像: {Path(image_path).name}")
             print(f"🗑️ 后端删除图像: {Path(image_path).name}")
 
+    def handle_image_order_changed(self, new_order: list):
+        """处理图像顺序变化事件"""
+        # 更新后端的图像顺序
+        self.current_images = new_order.copy()
+        print(f"🔄 后端图像顺序已更新: {[Path(p).name for p in self.current_images]}")
+
+        # 发出UI状态变化信号，让SDF卡片容器也更新顺序
+        self.ui_state_changed.emit()
+
     def handle_clear_images(self):
         """处理清空图像事件"""
         self.current_images.clear()

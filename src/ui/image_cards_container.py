@@ -51,6 +51,7 @@ class ImageCardsContainer(QWidget):
     # 信号定义
     images_changed = Signal()  # 图像列表改变
     image_remove_requested = Signal(str)  # 请求删除图像信号
+    image_order_changed = Signal(list)  # 图像顺序改变信号
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -177,6 +178,10 @@ class ImageCardsContainer(QWidget):
         """获取所有图像数据"""
         return [card.get_image_path() for card in self.image_cards]
 
+    def get_current_image_order(self) -> list:
+        """获取当前图像顺序（按UI中的排列顺序）"""
+        return [card.get_image_path() for card in self.image_cards]
+
     def get_image_count(self) -> int:
         """获取图像数量"""
         return len(self.image_cards)
@@ -208,4 +213,9 @@ class ImageCardsContainer(QWidget):
             # 发出变化信号
             self.images_changed.emit()
 
+            # 发出顺序变化信号，传递新的图像顺序
+            new_order = self.get_current_image_order()
+            self.image_order_changed.emit(new_order)
+
             print(f"🔄 交换图像位置: {Path(source_path).name} ↔ {Path(target_path).name}")
+            print(f"📋 新的图像顺序: {[Path(p).name for p in new_order]}")
