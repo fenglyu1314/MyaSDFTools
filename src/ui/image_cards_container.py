@@ -22,7 +22,7 @@ class PlaceholderCardWidget(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setFixedSize(110, 130)
+        self.setFixedSize(115, 135)
         self.setAcceptDrops(True)
         
         # 简化的占位符样式
@@ -50,6 +50,7 @@ class ImageCardsContainer(QWidget):
 
     # 信号定义
     images_changed = Signal()  # 图像列表改变
+    image_remove_requested = Signal(str)  # 请求删除图像信号
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -119,7 +120,11 @@ class ImageCardsContainer(QWidget):
         return True
     
     def _remove_image(self, image_path: str):
-        """移除图像卡片 - 恢复对应位置的占位卡片"""
+        """移除图像卡片 - 发出删除请求信号"""
+        # 发出删除请求信号，让外部处理器处理后端删除
+        self.image_remove_requested.emit(image_path)
+
+        # UI层面的删除操作
         for i, card in enumerate(self.image_cards):
             if card.get_image_path() == image_path:
                 # 从布局中移除

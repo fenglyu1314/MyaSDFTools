@@ -33,7 +33,7 @@ class ImageCardWidget(QFrame):
         self.image_path = image_path
         self.drag_start_position = None
 
-        self.setFixedSize(110, 130)  # 减少高度，移除角度设置区域
+        self.setFixedSize(115, 135)  # 调整尺寸让8个卡片更好地填充区域
         self.setAcceptDrops(True)  # 接受拖拽
         self.setFrameStyle(QFrame.Box)
         self.setLineWidth(1)
@@ -59,9 +59,9 @@ class ImageCardWidget(QFrame):
         layout.setContentsMargins(5, 5, 5, 5)
         layout.setSpacing(3)  # 减少间距
 
-        # 缩略图区域 (80x80)
+        # 缩略图区域 (85x85)
         self.thumbnail_label = QLabel()
-        self.thumbnail_label.setFixedSize(80, 80)
+        self.thumbnail_label.setFixedSize(85, 85)
         self.thumbnail_label.setAlignment(Qt.AlignCenter)
         self.thumbnail_label.setStyleSheet("""
             QLabel {

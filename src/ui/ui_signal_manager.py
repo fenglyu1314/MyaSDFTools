@@ -59,8 +59,11 @@ class SignalConnectionManager:
         
         # 图像卡片容器信号
         image_cards_container = self.components.get('image_cards_container')
-        if image_cards_container and hasattr(image_cards_container, 'images_changed'):
-            image_cards_container.images_changed.connect(self._handle_images_changed)
+        if image_cards_container:
+            if hasattr(image_cards_container, 'images_changed'):
+                image_cards_container.images_changed.connect(self._handle_images_changed)
+            if hasattr(image_cards_container, 'image_remove_requested'):
+                image_cards_container.image_remove_requested.connect(self.event_handler.handle_remove_image)
         
         # 参数组件信号
         parameter_widget = self.components.get('parameter_widget')

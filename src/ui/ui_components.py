@@ -15,7 +15,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont
 
 from .window_styles import ButtonStyles, WidgetStyles
-from .image_card_widget import ImageCardsContainer
+from .image_cards_container import ImageCardsContainer
 from .sdf_card_widget import SDFCardsContainer
 from .parameter_widget import ParameterWidget
 from .zoomable_image_widget import ZoomableImageWidget

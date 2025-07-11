@@ -212,6 +212,24 @@ class MainWindowEventHandler(QObject):
         else:
             event.ignore()
 
+    def handle_remove_image(self, image_path: str):
+        """处理删除单张图像事件"""
+        if image_path in self.current_images:
+            # 从当前图像列表中移除
+            self.current_images.remove(image_path)
+
+            # 从后端图像管理器中移除
+            self.image_manager.remove_image(image_path)
+
+            # 如果没有图像了，清空SDF结果
+            if not self.current_images:
+                self.sdf_result = None
+
+            # 更新UI状态
+            self.ui_state_changed.emit()
+            self.status_updated.emit(f"已删除图像: {Path(image_path).name}")
+            print(f"🗑️ 后端删除图像: {Path(image_path).name}")
+
     def handle_clear_images(self):
         """处理清空图像事件"""
         self.current_images.clear()
