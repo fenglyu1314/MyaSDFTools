@@ -8,8 +8,9 @@
 """
 
 from pathlib import Path
-from PySide6.QtWidgets import QWidget, QHBoxLayout
+from PySide6.QtWidgets import QWidget, QHBoxLayout, QVBoxLayout, QLabel
 from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QPainter, QPen, QColor
 
 from .image_card import ImageCardWidget
 
@@ -24,25 +25,98 @@ class PlaceholderCardWidget(QWidget):
         super().__init__(parent)
         self.setFixedSize(115, 135)
         self.setAcceptDrops(True)
-        
-        # 简化的占位符样式
+
+        # 设置基础样式，不包含边框（边框通过paintEvent绘制）
         self.setStyleSheet("""
             QWidget {
-                background-color: palette(base);
-                border: 2px dashed palette(mid);
+                background-color: #E0E0E0;
                 border-radius: 5px;
             }
             QWidget:hover {
-                border: 2px dashed #2196F3;
-                background-color: palette(alternate-base);
+                background-color: #F0F0F0;
             }
         """)
+
+        # 用于跟踪悬停状态
+        self.is_hovered = False
+
+        self._init_ui()
+
+    def _init_ui(self):
+        """初始化UI"""
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(5)
+
+        # 加号图标
+        plus_label = QLabel("+")
+        plus_label.setAlignment(Qt.AlignCenter)
+        plus_label.setStyleSheet("""
+            QLabel {
+                font-size: 36px;
+                font-weight: bold;
+                color: #666666;
+                background: transparent;
+                border: none;
+            }
+        """)
+        layout.addWidget(plus_label)
+
+        # 提示文字
+        hint_label = QLabel("点击添加图像")
+        hint_label.setAlignment(Qt.AlignCenter)
+        hint_label.setStyleSheet("""
+            QLabel {
+                font-size: 11px;
+                color: #666666;
+                background: transparent;
+                border: none;
+            }
+        """)
+        layout.addWidget(hint_label)
 
     def mousePressEvent(self, event):
         """点击添加图像"""
         if event.button() == Qt.MouseButton.LeftButton:
             self.add_image_requested.emit()
         super().mousePressEvent(event)
+
+    def enterEvent(self, event):
+        """鼠标进入事件"""
+        self.is_hovered = True
+        self.update()  # 触发重绘
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        """鼠标离开事件"""
+        self.is_hovered = False
+        self.update()  # 触发重绘
+        super().leaveEvent(event)
+
+    def paintEvent(self, event):
+        """自定义绘制事件 - 绘制虚线边框"""
+        super().paintEvent(event)
+
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+
+        # 设置虚线画笔
+        pen = QPen()
+        pen.setStyle(Qt.DashLine)
+        pen.setWidth(3)
+
+        if self.is_hovered:
+            pen.setColor(QColor("#2196F3"))  # 悬停时蓝色
+        else:
+            pen.setColor(QColor("#666666"))  # 正常时深灰色
+
+        painter.setPen(pen)
+
+        # 绘制虚线边框（留出一些边距）
+        rect = self.rect().adjusted(2, 2, -2, -2)
+        painter.drawRoundedRect(rect, 5, 5)
+
+        painter.end()
 
 
 class ImageCardsContainer(QWidget):
@@ -67,7 +141,7 @@ class ImageCardsContainer(QWidget):
         self.layout = QHBoxLayout(self)
         self.layout.setContentsMargins(15, 0, 15, 0)  # 左右边距让卡片居中
         self.layout.setSpacing(7)  # 精确计算的间距让8个卡片平均分布
-        self.layout.setAlignment(Qt.AlignmentFlag.AlignCenter)  # 居中对齐
+        self.layout.setAlignment(Qt.AlignmentFlag.AlignCenter)  # 恢复居中对齐，现在高度匹配应该正常工作
 
     def _init_placeholders(self):
         """初始化8个占位卡片"""
@@ -81,8 +155,8 @@ class ImageCardsContainer(QWidget):
         """处理添加图像请求"""
         # 通过父窗口的事件处理器处理导入图像
         parent_window = self.window()
-        if hasattr(parent_window, '_handle_import'):
-            parent_window._handle_import()
+        if hasattr(parent_window, 'event_handler'):
+            parent_window.event_handler.handle_import_images()
 
     def add_image(self, image_path: str) -> bool:
         """添加图像卡片 - 替换第一个可用的占位卡片"""

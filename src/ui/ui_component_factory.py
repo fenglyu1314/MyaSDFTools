@@ -85,18 +85,18 @@ class UIComponentFactory:
         main_window.setStatusBar(status_bar)
 
         # 创建状态栏组件
-        status_label, image_count_label, time_label, zoom_label = StatusBarFactory.create_status_widgets()
+        status_label, image_count_label, time_label, total_progress_label = StatusBarFactory.create_status_widgets()
 
         # 添加到状态栏
         status_bar.addWidget(status_label, 1)  # 拉伸
         status_bar.addPermanentWidget(image_count_label)
         status_bar.addPermanentWidget(time_label)
-        status_bar.addPermanentWidget(zoom_label)
+        status_bar.addPermanentWidget(total_progress_label)
 
         return {
             'status_bar': status_bar,
             'status_label': status_label,
             'image_count_label': image_count_label,
             'time_label': time_label,
-            'status_zoom_label': zoom_label
+            'total_progress_label': total_progress_label
         }

@@ -18,7 +18,98 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame
 )
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QPixmap, QFont
+from PySide6.QtGui import QPixmap, QFont, QPainter, QPen, QColor
+
+
+class SDFPlaceholderCardWidget(QWidget):
+    """SDF占位卡片组件 - 显示等待生成SDF的占位符"""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(110, 120)  # 与SDFCardWidget相同的尺寸
+
+        # 设置基础样式，不包含边框（边框通过paintEvent绘制）
+        self.setStyleSheet("""
+            QWidget {
+                background-color: #F5F5F5;
+                border-radius: 5px;
+            }
+        """)
+
+        # 用于跟踪悬停状态
+        self.is_hovered = False
+
+        self._init_ui()
+
+    def _init_ui(self):
+        """初始化UI"""
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(5)
+
+        # 等待图标 - 使用简约的圆点
+        wait_label = QLabel("⟳")
+        wait_label.setAlignment(Qt.AlignCenter)
+        wait_label.setStyleSheet("""
+            QLabel {
+                font-size: 40px;
+                color: #CCCCCC;
+                background: transparent;
+                border: none;
+            }
+        """)
+        layout.addWidget(wait_label)
+
+        # 提示文字
+        hint_label = QLabel("等待生成")
+        hint_label.setAlignment(Qt.AlignCenter)
+        hint_label.setStyleSheet("""
+            QLabel {
+                font-size: 12px;
+                color: #999999;
+                background: transparent;      
+                border: none;
+            }
+        """)
+        layout.addWidget(hint_label)
+
+    def enterEvent(self, event):
+        """鼠标进入事件"""
+        self.is_hovered = True
+        self.update()  # 触发重绘
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        """鼠标离开事件"""
+        self.is_hovered = False
+        self.update()  # 触发重绘
+        super().leaveEvent(event)
+
+    def paintEvent(self, event):
+        """自定义绘制事件 - 绘制虚线边框"""
+        super().paintEvent(event)
+
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+
+        # 设置虚线画笔
+        pen = QPen()
+        pen.setStyle(Qt.DashLine)
+        pen.setWidth(2)
+
+        if self.is_hovered:
+            pen.setColor(QColor("#CCCCCC"))  # 悬停时稍微深一点
+        else:
+            pen.setColor(QColor("#DDDDDD"))  # 正常时浅灰色
+
+        painter.setPen(pen)
+
+        # 绘制虚线边框（留出一些边距）
+        rect = self.rect().adjusted(2, 2, -2, -2)
+        painter.drawRoundedRect(rect, 5, 5)
+
+        painter.end()
+
 
 class SDFCardWidget(QFrame):
     """SDF结果卡片组件"""
@@ -35,7 +126,7 @@ class SDFCardWidget(QFrame):
         self.setLineWidth(1)
         self.setStyleSheet("""
             QFrame {
-                background-color: white;
+                background-color: #E0E0E0;
                 border: 1px solid #CCCCCC;
                 border-radius: 5px;
             }
@@ -55,10 +146,10 @@ class SDFCardWidget(QFrame):
         self.sdf_preview_label.setAlignment(Qt.AlignCenter)
         self.sdf_preview_label.setStyleSheet("""
             QLabel {
-                border: 1px solid #DDDDDD;
-                background-color: #F8F8F8;
+                border: 1px solid #CCCCCC;
+                background-color: #F5F5F5;
                 border-radius: 3px;
-                color: #999999;
+                color: #666666;
                 font-size: 11px;
             }
         """)
@@ -71,7 +162,7 @@ class SDFCardWidget(QFrame):
         self.status_label.setStyleSheet("""
             QLabel {
                 font-size: 11px;
-                color: #666666;
+                color: #333333;
                 font-weight: bold;
             }
         """)
@@ -86,7 +177,7 @@ class SDFCardWidget(QFrame):
             self.status_label.setStyleSheet("""
                 QLabel {
                     font-size: 11px;
-                    color: #666666;
+                    color: #333333;
                     font-weight: bold;
                 }
             """)
@@ -157,47 +248,93 @@ class SDFCardWidget(QFrame):
 
 class SDFCardsContainer(QWidget):
     """SDF结果卡片容器"""
-    
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.sdf_cards = []  # 存储SDF卡片
-        
+        self.placeholder_cards = []  # 存储占位卡片
+        self.max_cards = 8  # 最大卡片数量
+
         self._init_ui()
+        self._init_placeholders()  # 初始显示8个占位卡片
     
     def _init_ui(self):
         """初始化UI"""
         self.layout = QHBoxLayout(self)
-        self.layout.setContentsMargins(5, 5, 5, 5)
-        #self.layout.setSpacing(10)  # 增加间距避免重叠
-        self.layout.setAlignment(Qt.AlignLeft | Qt.AlignTop)  # 左对齐并顶部对齐
+        self.layout.setContentsMargins(15, 0, 15, 0)  # 左右边距让卡片居中，与图像导入区域保持一致
+        self.layout.setSpacing(10)  # 稍微增加间距，让卡片横向位置更好地对齐区域1
+        self.layout.setAlignment(Qt.AlignmentFlag.AlignCenter)  # 居中对齐，与图像导入区域保持一致
+
+    def _init_placeholders(self):
+        """初始化8个占位卡片"""
+        for i in range(self.max_cards):
+            placeholder = SDFPlaceholderCardWidget()
+            self.placeholder_cards.append(placeholder)
+            self.layout.addWidget(placeholder)
     
     def add_sdf_card(self, image_path: str) -> SDFCardWidget:
-        """添加SDF卡片"""
+        """添加SDF卡片 - 替换对应位置的占位卡片"""
+        # 检查数量限制
+        if len(self.sdf_cards) >= self.max_cards:
+            print(f"❌ SDF卡片数量已达上限({self.max_cards}张)")
+            return None
+
         # 检查是否已存在
         for card in self.sdf_cards:
             if card.get_image_path() == image_path:
                 return card
-        
+
+        # 找到第一个可用的占位卡片位置
+        insert_index = len(self.sdf_cards)
+        if insert_index < len(self.placeholder_cards):
+            # 移除对应位置的占位卡片
+            placeholder = self.placeholder_cards[insert_index]
+            self.layout.removeWidget(placeholder)
+            placeholder.hide()
+
         # 创建新卡片
         card = SDFCardWidget(image_path)
-        
-        # 添加到布局
-        self.layout.insertWidget(len(self.sdf_cards), card)
+
+        # 插入到正确位置
+        self.layout.insertWidget(insert_index, card)
         self.sdf_cards.append(card)
-        
+
         return card
     
     def remove_sdf_card(self, image_path: str):
-        """移除SDF卡片"""
+        """移除SDF卡片 - 恢复占位卡片"""
         for i, card in enumerate(self.sdf_cards):
             if card.get_image_path() == image_path:
                 # 从布局中移除
                 self.layout.removeWidget(card)
                 card.deleteLater()
-                
+
                 # 从列表中移除
                 self.sdf_cards.pop(i)
+
+                # 重新排列剩余的卡片和占位卡片
+                self._rearrange_cards()
                 break
+
+    def _rearrange_cards(self):
+        """重新排列SDF卡片和占位卡片"""
+        # 清空布局中的所有组件
+        while self.layout.count():
+            child = self.layout.takeAt(0)
+            if child.widget():
+                child.widget().hide()
+
+        # 重新添加SDF卡片
+        for i, card in enumerate(self.sdf_cards):
+            self.layout.insertWidget(i, card)
+            card.show()
+
+        # 添加剩余的占位卡片
+        for i in range(len(self.sdf_cards), self.max_cards):
+            if i < len(self.placeholder_cards):
+                placeholder = self.placeholder_cards[i]
+                self.layout.insertWidget(i, placeholder)
+                placeholder.show()
     
     def get_sdf_card(self, image_path: str) -> Optional[SDFCardWidget]:
         """获取指定图像的SDF卡片"""
@@ -207,12 +344,15 @@ class SDFCardsContainer(QWidget):
         return None
     
     def clear(self):
-        """清空所有SDF卡片"""
+        """清空所有SDF卡片 - 恢复所有占位卡片"""
         for card in self.sdf_cards:
             self.layout.removeWidget(card)
             card.deleteLater()
-        
+
         self.sdf_cards.clear()
+
+        # 重新排列，显示所有占位卡片
+        self._rearrange_cards()
     
     def update_cards_from_images(self, images_data: list):
         """根据图像数据更新SDF卡片"""
@@ -252,16 +392,11 @@ class SDFCardsContainer(QWidget):
         if new_card_order == self.sdf_cards:
             return
 
-        # 从布局中移除所有卡片
-        for card in self.sdf_cards:
-            self.layout.removeWidget(card)
-
-        # 按新顺序重新添加到布局
-        for i, card in enumerate(new_card_order):
-            self.layout.insertWidget(i, card)
-
         # 更新卡片列表
         self.sdf_cards = new_card_order
+
+        # 重新排列所有卡片和占位卡片
+        self._rearrange_cards()
 
         print(f"🔄 SDF卡片重新排序: {[Path(card.get_image_path()).name for card in self.sdf_cards]}")
     

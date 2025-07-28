@@ -47,6 +47,8 @@ class UILayoutManager:
     def _create_left_layout(self):
         """创建左侧布局"""
         left_layout = QVBoxLayout()
+        left_layout.setContentsMargins(0, 0, 0, 0)  # 移除边距确保对齐
+        left_layout.setSpacing(8)  # 设置统一的间距
 
         # 区域1: 图像导入区域
         image_import_area, image_cards_container, progress_bar = UIComponentFactory.create_image_import_area()
@@ -95,8 +97,10 @@ class UILayoutManager:
     def _create_right_layout(self):
         """创建右侧布局"""
         right_layout = QVBoxLayout()
+        right_layout.setContentsMargins(0, 0, 0, 0)  # 移除边距确保对齐
+        right_layout.setSpacing(8)  # 与左侧布局保持一致的间距
 
-        # 区域3: 参数控制区域
+        # 区域3: 参数控制区域 - 与区域1上边缘对齐
         parameter_area, parameter_widget = UIComponentFactory.create_parameter_area()
         right_layout.addWidget(parameter_area)
         self.components['parameter_widget'] = parameter_widget

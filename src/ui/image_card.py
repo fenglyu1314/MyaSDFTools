@@ -37,16 +37,16 @@ class ImageCardWidget(QFrame):
         self.setAcceptDrops(True)  # 接受拖拽
         self.setFrameStyle(QFrame.Box)
         self.setLineWidth(1)
-        # 使用系统主题颜色，添加背景色区分
+        # 使用浅灰色背景以在深色模式下更好地区分
         self.setStyleSheet("""
             QFrame {
-                background-color: palette(base);
-                border: 1px solid palette(mid);
+                background-color: #E0E0E0;
+                border: 1px solid #CCCCCC;
                 border-radius: 5px;
             }
             QFrame:hover {
                 border: 1px solid #2196F3;
-                background-color: palette(alternate-base);
+                background-color: #F0F0F0;
             }
         """)
 
@@ -65,8 +65,8 @@ class ImageCardWidget(QFrame):
         self.thumbnail_label.setAlignment(Qt.AlignCenter)
         self.thumbnail_label.setStyleSheet("""
             QLabel {
-                border: 1px solid palette(mid);
-                background-color: palette(base);
+                border: 1px solid #CCCCCC;
+                background-color: #F5F5F5;
                 border-radius: 3px;
             }
         """)
@@ -80,11 +80,12 @@ class ImageCardWidget(QFrame):
         self.filename_label = QLabel(filename)
         self.filename_label.setAlignment(Qt.AlignCenter)
         self.filename_label.setFixedHeight(16)  # 固定高度
-        # 使用全局样式，只设置必要的属性
+        # 使用深色文字以在浅灰色背景上更好地显示
         self.filename_label.setStyleSheet("""
             QLabel {
                 font-size: 11px;
                 font-weight: bold;
+                color: #333333;
             }
         """)
         layout.addWidget(self.filename_label)

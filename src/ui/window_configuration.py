@@ -20,8 +20,9 @@ class WindowConfiguration:
         window.setWindowTitle("SDF工具 - 二次元脸部SDF生成")
         
         # 计算窗口总高度：内容区域 + 菜单栏 + 状态栏
-        # 内容区域: 775px, 菜单栏: ~28px, 状态栏: ~25px
-        total_height = 775 + 28 + 25  # = 828px
+        # 内容区域: 区域1(190) + 区域2(160) + 区域4/5(370) + 间距 = 795px
+        # 菜单栏: ~28px, 状态栏: ~25px
+        total_height = 795 + 28 + 25  # = 848px
         window.setFixedSize(1318, total_height)
         
         # 设置窗口图标
@@ -40,7 +41,7 @@ class WindowConfiguration:
     @staticmethod
     def get_default_window_size():
         """获取默认窗口大小"""
-        return (1318, 828)
+        return (1318, 848)
 
     @staticmethod
     def get_minimum_window_size():

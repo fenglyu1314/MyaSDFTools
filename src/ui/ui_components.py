@@ -31,21 +31,25 @@ class UIComponentFactory:
         area.setStyleSheet(WidgetStyles.group_box_style())
         layout = QVBoxLayout(area)
         layout.setContentsMargins(4, 4, 4, 4)
+        layout.setSpacing(2)  # 减少间距
 
-        # 图像卡片容器
+        # 图像卡片容器 - 调整高度匹配区域总高度
         image_cards_container = ImageCardsContainer()
-        image_cards_container.setFixedHeight(200)
+        image_cards_container.setFixedHeight(160)  # 减少到160px
         layout.addWidget(image_cards_container)
 
         # 进度条
         progress_bar = QProgressBar()
+        progress_bar.setRange(0, 100)  # 设置进度条范围
+        progress_bar.setValue(0)       # 设置初始值为0
         progress_bar.setTextVisible(False)
         progress_bar.setVisible(False)
         progress_bar.setFixedHeight(10)
         progress_bar.setStyleSheet(WidgetStyles.progress_bar_style())
         layout.addWidget(progress_bar)
 
-        area.setFixedSize(1000, 210)
+        # 区域1高度: 160(容器) + 10(进度条) + 18(边距间距) = 188px，设为190px留2px缓冲
+        area.setFixedSize(1000, 190)
         return area, image_cards_container, progress_bar
 
     @staticmethod
@@ -58,10 +62,11 @@ class UIComponentFactory:
 
         # SDF结果卡片容器
         sdf_cards_container = SDFCardsContainer()
-        sdf_cards_container.setFixedHeight(160)
+        sdf_cards_container.setFixedHeight(135)  # 减少高度，为边距留出空间
         layout.addWidget(sdf_cards_container)
 
-        area.setFixedSize(1000, 160)
+        # 区域2高度: 135(容器) + 8(边距) + 25(GroupBox标题和边框) = 168px，设为170px留2px缓冲
+        area.setFixedSize(1000, 170)
         return area, sdf_cards_container
 
     @staticmethod
@@ -122,9 +127,9 @@ class UIComponentFactory:
         layout.setContentsMargins(4, 4, 4, 4)
         layout.setSpacing(5)
 
-        # 预览组件
+        # 预览组件 - 调整宽度适应新的容器尺寸
         merged_sdf_preview = ZoomableImageWidget()
-        merged_sdf_preview.setFixedSize(480, 280)
+        merged_sdf_preview.setFixedSize(486, 300)
         layout.addWidget(merged_sdf_preview)
 
         # 控制按钮区域
@@ -157,7 +162,8 @@ class UIComponentFactory:
 
         layout.addLayout(control_layout)
 
-        area.setFixedSize(490, 350)
+        # 区域4宽度: 496px (与区域5一起占满1000px宽度，减去8px间距)
+        area.setFixedSize(496, 370)
         return area, merged_sdf_preview, fit_btn, actual_btn, reset_btn, zoom_label
 
     @staticmethod
@@ -169,10 +175,10 @@ class UIComponentFactory:
         layout.setContentsMargins(4, 4, 4, 4)
         layout.setSpacing(5)
 
-        # 光照预览组件 - 使用普通QLabel显示完整图像
+        # 光照预览组件 - 调整宽度适应新的容器尺寸
         lighting_preview = QLabel("光照效果预览\n请先生成SDF")
         lighting_preview.setAlignment(Qt.AlignCenter)
-        lighting_preview.setFixedSize(480, 280)
+        lighting_preview.setFixedSize(486, 300)
         lighting_preview.setScaledContents(False)  # 不自动缩放内容，保持图像质量
         lighting_preview.setStyleSheet("""
             QLabel {
@@ -208,7 +214,8 @@ class UIComponentFactory:
 
         layout.addLayout(control_layout)
 
-        area.setFixedSize(490, 350)
+        # 区域5宽度: 496px (与区域4一起占满1000px宽度，减去8px间距)
+        area.setFixedSize(496, 370)
         return area, lighting_preview, angle_slider, angle_value_label
 
 
@@ -230,11 +237,11 @@ class StatusBarFactory:
         time_label = QLabel("")
         time_label.setMinimumWidth(120)
 
-        # 缩放标签
-        zoom_label = QLabel("100%")
-        zoom_label.setMinimumWidth(60)
+        # 总进度标签（替换原来的缩放标签）
+        total_progress_label = QLabel("0%")
+        total_progress_label.setMinimumWidth(60)
 
-        return status_label, image_count_label, time_label, zoom_label
+        return status_label, image_count_label, time_label, total_progress_label
 
 
 class MenuFactory:

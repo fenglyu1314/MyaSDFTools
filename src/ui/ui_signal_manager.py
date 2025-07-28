@@ -78,15 +78,21 @@ class SignalConnectionManager:
         self.event_handler.status_updated.connect(self._update_status)
         self.event_handler.ui_state_changed.connect(self._update_ui_state)
         self.event_handler.sdf_generated.connect(self._handle_sdf_generated)
-        self.event_handler.progress_updated.connect(self._handle_progress_updated)
+        self.event_handler.overall_progress_updated.connect(self._handle_overall_progress_updated)
+        self.event_handler.single_batch_progress_updated.connect(self._handle_single_batch_progress_updated)
 
     def _handle_generate_sdf(self):
         """处理生成SDF"""
-        # 显示进度条
+        # 显示进度条并重置
         progress_bar = self.components.get('progress_bar')
         if progress_bar:
             progress_bar.setVisible(True)
             progress_bar.setValue(0)
+
+        # 重置整体进度显示
+        total_progress_label = self.components.get('total_progress_label')
+        if total_progress_label:
+            total_progress_label.setText("0%")
 
         parameters = self.components['parameter_widget'].get_sdf_params()
         self.event_handler.handle_generate_sdf(parameters)
@@ -244,8 +250,14 @@ class SignalConnectionManager:
         if time_label:
             time_label.setText(f"计算时间: {computation_time:.2f}s")
 
-    def _handle_progress_updated(self, progress: int):
-        """处理进度更新"""
+    def _handle_overall_progress_updated(self, progress: int):
+        """处理整体进度更新 - 更新右下角百分比显示（包括单张生成+合并）"""
+        total_progress_label = self.components.get('total_progress_label')
+        if total_progress_label:
+            total_progress_label.setText(f"{progress}%")
+
+    def _handle_single_batch_progress_updated(self, progress: int):
+        """处理单张SDF批次进度更新 - 更新区域1的进度条（只显示单张生成进度）"""
         progress_bar = self.components.get('progress_bar')
         if progress_bar:
             progress_bar.setValue(progress)

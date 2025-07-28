@@ -26,7 +26,8 @@ class SDFGenerationWorker(QThread):
 
     finished = Signal(object, float)  # sdf_result, computation_time
     error = Signal(str)  # error_message
-    progress = Signal(int)  # progress_value
+    overall_progress = Signal(int)  # 整体进度值 (0-100) - 包括单张生成+合并
+    single_batch_progress = Signal(int)  # 单张SDF批次进度值 (0-100) - 只包括单张生成
     single_sdf_completed = Signal(str, object, float)  # image_path, sdf_result, computation_time
     merged_sdf_updated = Signal(object)  # merged_sdf_result
 
@@ -41,11 +42,19 @@ class SDFGenerationWorker(QThread):
         try:
             if len(self.image_paths) == 1:
                 # 单张图像SDF生成 - 过滤单张SDF相关参数
+                self.single_batch_progress.emit(0)  # 单张批次进度开始
+                self.overall_progress.emit(0)       # 整体进度开始
+
                 single_sdf_params = self._filter_single_sdf_params(self.parameters)
                 sdf_result, computation_time = self.sdf_generator.compute_single_sdf(
                     self.image_paths[0],
                     **single_sdf_params
                 )
+
+                # 发出进度完成信号
+                self.single_batch_progress.emit(100)  # 单张批次完成
+                self.overall_progress.emit(100)       # 整体完成（单张无需合并）
+
                 # 发出单张完成信号
                 self.single_sdf_completed.emit(self.image_paths[0], sdf_result, computation_time)
                 # 发出最终完成信号
@@ -73,9 +82,13 @@ class SDFGenerationWorker(QThread):
                     # 发出单张完成信号（立即显示）
                     self.single_sdf_completed.emit(image_path, single_sdf, single_time)
 
-                    # 更新进度（单张计算占80%）
-                    progress = int((i + 1) / len(self.image_paths) * 80)
-                    self.progress.emit(progress)
+                    # 更新单张批次进度（每张完成后更新）
+                    single_batch_progress = int((i + 1) / len(self.image_paths) * 100)
+                    self.single_batch_progress.emit(single_batch_progress)
+
+                    # 更新整体进度（单张计算占80%）
+                    overall_progress = int((i + 1) / len(self.image_paths) * 80)
+                    self.overall_progress.emit(overall_progress)
 
                 print(f"✅ 所有单张SDF计算完成，开始计算合并SDF")
 
@@ -93,8 +106,8 @@ class SDFGenerationWorker(QThread):
                 # 发出合并SDF更新信号
                 self.merged_sdf_updated.emit(final_sdf)
 
-                # 更新最终进度
-                self.progress.emit(100)
+                # 更新最终整体进度
+                self.overall_progress.emit(100)
 
                 # 发出最终完成信号
                 self.finished.emit(final_sdf, total_time)
@@ -122,7 +135,8 @@ class MainWindowEventHandler(QObject):
     sdf_generated = Signal(object, float)
     single_sdf_completed = Signal(str, object, float)  # image_path, sdf_result, computation_time
     merged_sdf_updated = Signal(object)  # merged_sdf_result
-    progress_updated = Signal(int)  # progress_value
+    overall_progress_updated = Signal(int)  # 整体进度值 (0-100) - 包括单张生成+合并
+    single_batch_progress_updated = Signal(int)  # 单张SDF批次进度值 (0-100) - 只包括单张生成
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -162,7 +176,8 @@ class MainWindowEventHandler(QObject):
         self.sdf_worker.error.connect(self._on_sdf_error)
         self.sdf_worker.single_sdf_completed.connect(self._on_single_sdf_completed)
         self.sdf_worker.merged_sdf_updated.connect(self._on_merged_sdf_updated)
-        self.sdf_worker.progress.connect(self._on_progress_updated)
+        self.sdf_worker.overall_progress.connect(self._on_overall_progress_updated)
+        self.sdf_worker.single_batch_progress.connect(self._on_single_batch_progress_updated)
         
         # 启动线程
         self.sdf_worker.start()
@@ -313,10 +328,15 @@ class MainWindowEventHandler(QObject):
         # 转发信号给UI
         self.merged_sdf_updated.emit(merged_sdf)
 
-    def _on_progress_updated(self, progress: int):
-        """进度更新回调"""
+    def _on_overall_progress_updated(self, progress: int):
+        """整体进度更新回调"""
         # 转发信号给UI
-        self.progress_updated.emit(progress)
+        self.overall_progress_updated.emit(progress)
+
+    def _on_single_batch_progress_updated(self, progress: int):
+        """单张SDF批次进度更新回调"""
+        # 转发信号给UI
+        self.single_batch_progress_updated.emit(progress)
 
     def _export_sdf_to_file(self, file_path: str):
         """导出SDF到文件"""
