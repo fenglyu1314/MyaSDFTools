@@ -4,7 +4,7 @@
 """
 SDF工具构建脚本
 
-用于自动化编译C++扩展模块和项目打包
+用于项目打包和依赖管理
 """
 
 import os
@@ -41,7 +41,7 @@ def run_command(cmd, cwd=None, check=True):
 def check_dependencies():
     """检查构建依赖"""
     print("检查构建依赖...")
-    
+
     # 检查Python
     try:
         import sys
@@ -49,70 +49,46 @@ def check_dependencies():
     except:
         print("✗ Python未找到")
         return False
-    
-    # 检查CMake
-    try:
-        result = run_command("cmake --version", check=False)
-        if result.returncode == 0:
-            print("✓ CMake已安装")
-        else:
-            print("✗ CMake未找到，请安装CMake")
-            return False
-    except:
-        print("✗ CMake未找到")
-        return False
-    
-    # 检查编译器
-    if sys.platform == "win32":
-        # Windows: 检查MSVC
-        try:
-            result = run_command("cl", check=False)
-            if "Microsoft" in result.stderr:
-                print("✓ MSVC编译器已找到")
-            else:
-                print("✗ MSVC编译器未找到，请安装Visual Studio")
-                return False
-        except:
-            print("✗ MSVC编译器未找到")
-            return False
-    else:
-        # Linux/Mac: 检查GCC/Clang
-        try:
-            result = run_command("gcc --version", check=False)
-            if result.returncode == 0:
-                print("✓ GCC编译器已找到")
-            else:
-                result = run_command("clang --version", check=False)
-                if result.returncode == 0:
-                    print("✓ Clang编译器已找到")
-                else:
-                    print("✗ 编译器未找到，请安装GCC或Clang")
-                    return False
-        except:
-            print("✗ 编译器未找到")
-            return False
-    
+
     return True
 
 def install_python_deps():
     """安装Python依赖"""
     print("安装Python依赖...")
-    
+
     # 检查requirements.txt
     if not Path("requirements.txt").exists():
         print("✗ requirements.txt未找到")
         return False
-    
+
     # 安装依赖
     cmd = f"{sys.executable} -m pip install -r requirements.txt"
     result = run_command(cmd, check=False)
-    
+
     if result.returncode == 0:
         print("✓ Python依赖安装成功")
         return True
     else:
         print("✗ Python依赖安装失败")
         return False
+
+def install_build_deps():
+    """安装构建依赖"""
+    print("安装构建依赖...")
+
+    build_deps = ["pyinstaller", "setuptools", "wheel"]
+
+    for dep in build_deps:
+        print(f"安装 {dep}...")
+        cmd = f"{sys.executable} -m pip install {dep}"
+        result = run_command(cmd, check=False)
+
+        if result.returncode != 0:
+            print(f"✗ {dep} 安装失败")
+            return False
+
+    print("✓ 构建依赖安装成功")
+    return True
 
 
 
@@ -141,36 +117,108 @@ def run_tests():
 def package_app():
     """打包应用程序"""
     print("打包应用程序...")
-    
+
     # 检查PyInstaller
     try:
         import PyInstaller
     except ImportError:
         print("安装PyInstaller...")
         run_command(f"{sys.executable} -m pip install pyinstaller")
-    
-    # 打包命令
-    cmd = [
-        "pyinstaller",
-        "--name=SDF_Tool",
-        "--windowed",
-        "--onefile",
-        "--add-data=assets;assets",
-        "--add-binary=src/sdf_core.*;.",
-        "--icon=assets/icon.ico" if Path("assets/icon.ico").exists() else "",
-        "main.py"
-    ]
-    
-    cmd = " ".join(filter(None, cmd))
+
+    # 创建临时spec文件以更好地控制打包过程
+    spec_content = create_pyinstaller_spec()
+    spec_file = "SDF_Tool.spec"
+
+    with open(spec_file, 'w', encoding='utf-8') as f:
+        f.write(spec_content)
+
+    print(f"创建spec文件: {spec_file}")
+
+    # 使用spec文件打包
+    cmd = f"pyinstaller --clean {spec_file}"
     result = run_command(cmd, check=False)
-    
+
     if result.returncode == 0:
         print("✓ 应用程序打包成功")
         print("可执行文件位于: dist/SDF_Tool.exe")
+
+        # 清理临时文件
+        if Path(spec_file).exists():
+            Path(spec_file).unlink()
+
         return True
     else:
         print("✗ 应用程序打包失败")
         return False
+
+def create_pyinstaller_spec():
+    """创建PyInstaller spec文件内容"""
+    return '''# -*- mode: python ; coding: utf-8 -*-
+
+block_cipher = None
+
+a = Analysis(
+    ['main.py'],
+    pathex=[],
+    binaries=[],
+    datas=[
+        ('src', 'src'),
+    ],
+    hiddenimports=[
+        'PySide6.QtCore',
+        'PySide6.QtGui',
+        'PySide6.QtWidgets',
+        'PIL',
+        'PIL.Image',
+        'cv2',
+        'numpy',
+        'scipy',
+        'scipy.ndimage',
+        'src.ui.main_window',
+        'src.core.sdf_generator',
+        'src.utils.image_utils',
+        'src.utils.file_utils',
+        'src.utils.math_utils',
+    ],
+    hookspath=[],
+    hooksconfig={},
+    runtime_hooks=[],
+    excludes=[
+        'tkinter',
+        'matplotlib',
+        'PyQt5',
+        'PyQt6',
+    ],
+    win_no_prefer_redirects=False,
+    win_private_assemblies=False,
+    cipher=block_cipher,
+    noarchive=False,
+)
+
+pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
+
+exe = EXE(
+    pyz,
+    a.scripts,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
+    [],
+    name='SDF_Tool',
+    debug=False,
+    bootloader_ignore_signals=False,
+    strip=False,
+    upx=True,
+    upx_exclude=[],
+    runtime_tmpdir=None,
+    console=False,
+    disable_windowed_traceback=False,
+    argv_emulation=False,
+    target_arch=None,
+    codesign_identity=None,
+    entitlements_file=None,
+)
+'''
 
 def clean_build():
     """清理构建文件"""
@@ -222,12 +270,11 @@ def main():
     
     if args.all or args.deps:
         success &= install_python_deps()
-    
+        success &= install_build_deps()
 
-    
     if args.all or args.test:
         success &= run_tests()
-    
+
     if args.all or args.package:
         success &= package_app()
     

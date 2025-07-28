@@ -7,7 +7,7 @@
 - 🖼️ **多角度SDF生成**: 导入多张不同角度的脸部光照图像，生成混合SDF
 - 🎯 **单张图SDF**: 快速将单张黑白图转换为SDF格式
 - 🔄 **实时预览**: 滑竿控制光照角度，实时预览SDF效果
-- ⚡ **高性能算法**: 支持C++加速的8SSEDT算法
+- ⚡ **高性能算法**: 优化的8SSEDT算法Python实现
 - 🎨 **现代界面**: 基于PySide6的直观GUI界面
 - 📊 **性能监控**: 显示计算时间和性能指标
 
@@ -15,14 +15,13 @@
 
 - **UI框架**: PySide6
 - **图像处理**: OpenCV, Pillow, NumPy
-- **核心算法**: Python + C++ (可选)
-- **构建系统**: CMake + pybind11
+- **核心算法**: 高性能Python实现
 
 ## 📋 系统要求
 
 - Python 3.8+
 - 4GB+ RAM (推荐8GB)
-- C++17 编译器 (可选，用于性能加速)
+
 
 ## 🚀 快速开始
 
@@ -47,16 +46,7 @@ python quick_start.py
 python main.py
 ```
 
-### 3. C++扩展 (可选，提升性能)
-
-```bash
-# 编译C++扩展以获得更好的性能
-python setup_cpp_extension.py build_ext --inplace
-```
-
-程序会自动检测C++扩展是否可用，如果可用会自动使用高性能的C++后端。
-
-### 4. 运行程序
+### 3. 运行程序
 
 ```bash
 # GUI模式
@@ -167,7 +157,7 @@ Python模块采用标准的包结构：
 
 - [8SSEDT算法](https://github.com/example/8ssedt) - 高效的距离变换算法
 - [PySide6](https://www.qt.io/qt-for-python) - 现代化的Python GUI框架
-- [pybind11](https://github.com/pybind/pybind11) - 优雅的C++/Python绑定
+
 
 ## 📞 联系方式
 
