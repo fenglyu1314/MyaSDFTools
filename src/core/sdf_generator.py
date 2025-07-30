@@ -90,7 +90,7 @@ class SDFGenerator:
 
         Args:
             image_paths: 图像文件路径列表
-            angles: 对应的光照角度列表 (度数，保留兼容性)
+            angles: 对应的光照角度列表 (度数)
             threshold: 二值化阈值
             normalize: 是否归一化
             invert: 是否反转内外区域
@@ -98,7 +98,6 @@ class SDFGenerator:
             sdf_direction: SDF计算方向 ("both", "inside", "outside")
             max_distance: 最大距离限制 (像素)
             num_threads: 线程数 (None表示自动)
-
 
         Returns:
             (mixed_sdf_result, computation_time)
@@ -164,7 +163,7 @@ class SDFGenerator:
         info = {
             'python_version': '0.2.0',
             'backend': 'Python',
-            'algorithms': ['8SSEDT', 'OpenCV Distance Transform'],
+            'algorithms': ['OpenCV Distance Transform', 'Improved SDF'],
             'blend_modes': ['sdf_blend']
         }
 

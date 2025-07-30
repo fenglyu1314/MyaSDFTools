@@ -5,8 +5,8 @@
 SDF核心算法模块
 
 实现SDF计算的核心算法：
-- 8SSEDT算法的Python实现
-- 改进的距离场计算
+- 基于OpenCV距离变换的改进SDF算法
+- 高效的距离场计算
 - 光照预览算法
 - 图像预处理
 """
@@ -53,21 +53,21 @@ class SDFCoreAlgorithm:
             raise RuntimeError(f"图像加载失败: {str(e)}")
 
     @staticmethod
-    def compute_sdf_python(binary_image: np.ndarray, 
-                          normalize: bool = True, 
-                          invert: bool = False, 
-                          sdf_direction: str = "both", 
+    def compute_sdf_python(binary_image: np.ndarray,
+                          normalize: bool = True,
+                          invert: bool = False,
+                          sdf_direction: str = "both",
                           max_distance: int = 100) -> np.ndarray:
         """
-        使用Python实现计算SDF (改进的距离场算法)
-        
+        使用OpenCV距离变换计算SDF (改进的距离场算法)
+
         Args:
             binary_image: 二值图像
             normalize: 是否归一化到[0,1]
             invert: 是否反转内外区域
             sdf_direction: SDF计算方向 ("both", "inside", "outside")
             max_distance: 最大距离限制 (像素)
-            
+
         Returns:
             SDF结果
         """
@@ -124,17 +124,17 @@ class SDFCoreAlgorithm:
     @staticmethod
     def compute_improved_sdf(inside_mask: np.ndarray, max_distance: int) -> np.ndarray:
         """
-        改进的SDF计算算法 - 按照参考文章实现正确的归一化
+        改进的SDF计算算法 - 基于OpenCV距离变换实现正确的归一化
 
-        实现文章中的8SSEDT算法归一化方式：
+        实现SDF标准归一化方式：
         - 物体外部：0到0.5的值
         - 物体边界：0.5
         - 物体内部：0.5到1的值
 
-        参考算法：
+        使用OpenCV的L2距离变换算法：
         val = 0.5f;
-        if (dist < 0) val += dist / sqrt(outsideMax) * 0.5f;  // 外部
-        else val += dist / sqrt(insideMax) * 0.5f;            // 内部
+        if (dist < 0) val += dist / outsideMax * 0.5f;  // 外部
+        else val += dist / insideMax * 0.5f;            // 内部
 
         Args:
             inside_mask: 内部区域掩码

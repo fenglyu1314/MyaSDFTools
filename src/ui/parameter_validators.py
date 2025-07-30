@@ -40,11 +40,13 @@ class ParameterValidator:
     def validate_blend_mode(value: str) -> Tuple[bool, str]:
         """验证混合模式参数"""
         valid_modes = [mode[0] for mode in ParameterDefaults.get_blend_mode_options()]
-        
+
         if value not in valid_modes:
             return False, f"混合模式必须是以下之一: {', '.join(valid_modes)}"
-        
+
         return True, ""
+
+
 
     @staticmethod
     def validate_sdf_direction(value: str) -> Tuple[bool, str]:
@@ -86,7 +88,8 @@ class ParameterValidator:
             valid, error = cls.validate_blend_mode(parameters['blend_mode'])
             if not valid:
                 errors.append(f"混合模式错误: {error}")
-        
+
+
         # 验证SDF方向
         if 'sdf_direction' in parameters:
             valid, error = cls.validate_sdf_direction(parameters['sdf_direction'])
@@ -119,7 +122,9 @@ class ParameterValidator:
             sanitized['max_distance'] = ParameterDefaults.clamp_parameter_value(
                 'max_distance', sanitized['max_distance']
             )
-        
+
+
+
         # 确保布尔参数是布尔类型
         boolean_params = ['normalize', 'invert', 'use_cpp_backend']
         for param in boolean_params:

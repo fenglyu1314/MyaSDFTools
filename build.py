@@ -4,156 +4,165 @@
 """
 SDF工具构建脚本
 
-用于项目打包和依赖管理
+用于项目打包，生成可执行文件
 """
 
 import os
 import sys
 import subprocess
 import shutil
-import argparse
 from pathlib import Path
+from datetime import datetime
 
-def run_command(cmd, cwd=None, check=True):
-    """运行命令并处理错误"""
-    print(f"执行命令: {cmd}")
+def run_command(cmd, cwd=None, show_output=True, log_file=None):
+    """运行命令"""
+    print(f"执行: {cmd}")
+
+    # 记录到日志文件
+    if log_file:
+        with open(log_file, 'a', encoding='utf-8') as f:
+            f.write(f"\n{'='*60}\n")
+            f.write(f"时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+            f.write(f"命令: {cmd}\n")
+            f.write(f"工作目录: {cwd or os.getcwd()}\n")
+            f.write(f"{'='*60}\n")
+
     try:
-        result = subprocess.run(
-            cmd, 
-            shell=True, 
-            cwd=cwd, 
-            check=check,
-            capture_output=True,
-            text=True,
-            encoding='utf-8'
-        )
-        if result.stdout:
-            print(result.stdout)
-        return result
+        if show_output:
+            # 实时显示输出，同时捕获到日志
+            result = subprocess.run(
+                cmd,
+                shell=True,
+                cwd=cwd,
+                check=True,
+                text=True,
+                encoding='utf-8',
+                capture_output=True
+            )
+
+            # 显示输出
+            if result.stdout:
+                print(result.stdout)
+            if result.stderr:
+                print(result.stderr)
+
+            # 记录到日志文件
+            if log_file:
+                with open(log_file, 'a', encoding='utf-8') as f:
+                    if result.stdout:
+                        f.write("STDOUT:\n")
+                        f.write(result.stdout)
+                        f.write("\n")
+                    if result.stderr:
+                        f.write("STDERR:\n")
+                        f.write(result.stderr)
+                        f.write("\n")
+                    f.write("状态: 成功\n")
+        else:
+            # 只捕获输出
+            result = subprocess.run(
+                cmd,
+                shell=True,
+                cwd=cwd,
+                check=True,
+                text=True,
+                encoding='utf-8',
+                capture_output=True
+            )
+
+            # 记录到日志文件
+            if log_file:
+                with open(log_file, 'a', encoding='utf-8') as f:
+                    if result.stdout:
+                        f.write("STDOUT:\n")
+                        f.write(result.stdout)
+                        f.write("\n")
+                    if result.stderr:
+                        f.write("STDERR:\n")
+                        f.write(result.stderr)
+                        f.write("\n")
+                    f.write("状态: 成功\n")
+
+        return True
     except subprocess.CalledProcessError as e:
-        print(f"命令执行失败: {e}")
-        if e.stderr:
+        error_msg = f"❌ 命令执行失败: {e}"
+        print(error_msg)
+
+        if hasattr(e, 'stderr') and e.stderr:
             print(f"错误信息: {e.stderr}")
-        if check:
-            sys.exit(1)
-        return e
+        if hasattr(e, 'stdout') and e.stdout:
+            print(f"输出信息: {e.stdout}")
 
-def check_dependencies():
-    """检查构建依赖"""
-    print("检查构建依赖...")
+        # 记录错误到日志文件
+        if log_file:
+            with open(log_file, 'a', encoding='utf-8') as f:
+                f.write(f"状态: 失败\n")
+                f.write(f"错误: {e}\n")
+                if hasattr(e, 'stdout') and e.stdout:
+                    f.write("STDOUT:\n")
+                    f.write(e.stdout)
+                    f.write("\n")
+                if hasattr(e, 'stderr') and e.stderr:
+                    f.write("STDERR:\n")
+                    f.write(e.stderr)
+                    f.write("\n")
 
-    # 检查Python
+        return False
+
+def create_build_log():
+    """创建构建日志文件"""
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    log_file = f"build_log_{timestamp}.txt"
+
+    # 创建日志文件并写入头部信息
+    with open(log_file, 'w', encoding='utf-8') as f:
+        f.write("SDF工具构建日志\n")
+        f.write("="*60 + "\n")
+        f.write(f"构建开始时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+        f.write(f"Python版本: {sys.version}\n")
+        f.write(f"工作目录: {os.getcwd()}\n")
+        f.write("="*60 + "\n")
+
+    print(f"📝 创建构建日志: {log_file}")
+    return log_file
+
+def check_pyinstaller():
+    """检查并安装PyInstaller"""
     try:
-        import sys
-        print(f"✓ Python {sys.version}")
-    except:
-        print("✗ Python未找到")
-        return False
-
-    return True
-
-def install_python_deps():
-    """安装Python依赖"""
-    print("安装Python依赖...")
-
-    # 检查requirements.txt
-    if not Path("requirements.txt").exists():
-        print("✗ requirements.txt未找到")
-        return False
-
-    # 安装依赖
-    cmd = f"{sys.executable} -m pip install -r requirements.txt"
-    result = run_command(cmd, check=False)
-
-    if result.returncode == 0:
-        print("✓ Python依赖安装成功")
+        __import__('PyInstaller')
+        print("✓ PyInstaller已安装")
         return True
-    else:
-        print("✗ Python依赖安装失败")
-        return False
-
-def install_build_deps():
-    """安装构建依赖"""
-    print("安装构建依赖...")
-
-    build_deps = ["pyinstaller", "setuptools", "wheel"]
-
-    for dep in build_deps:
-        print(f"安装 {dep}...")
-        cmd = f"{sys.executable} -m pip install {dep}"
-        result = run_command(cmd, check=False)
-
-        if result.returncode != 0:
-            print(f"✗ {dep} 安装失败")
-            return False
-
-    print("✓ 构建依赖安装成功")
-    return True
-
-
-
-def run_tests():
-    """运行测试"""
-    print("运行测试...")
-    
-    # 检查pytest
-    try:
-        import pytest
-    except ImportError:
-        print("安装pytest...")
-        run_command(f"{sys.executable} -m pip install pytest")
-    
-    # 运行测试
-    cmd = f"{sys.executable} -m pytest tests/ -v"
-    result = run_command(cmd, check=False)
-    
-    if result.returncode == 0:
-        print("✓ 所有测试通过")
-        return True
-    else:
-        print("✗ 测试失败")
-        return False
-
-def package_app():
-    """打包应用程序"""
-    print("打包应用程序...")
-
-    # 检查PyInstaller
-    try:
-        import PyInstaller
     except ImportError:
         print("安装PyInstaller...")
-        run_command(f"{sys.executable} -m pip install pyinstaller")
+        return run_command(f"{sys.executable} -m pip install pyinstaller")
 
-    # 创建临时spec文件以更好地控制打包过程
-    spec_content = create_pyinstaller_spec()
-    spec_file = "SDF_Tool.spec"
+def clean_previous_build():
+    """清理之前的构建文件"""
+    print("🧹 清理之前的构建文件...")
 
-    with open(spec_file, 'w', encoding='utf-8') as f:
-        f.write(spec_content)
+    dirs_to_clean = ["build", "dist"]
+    files_to_clean = ["*.spec"]
 
-    print(f"创建spec文件: {spec_file}")
+    cleaned_items = 0
+    for dir_name in dirs_to_clean:
+        if Path(dir_name).exists():
+            shutil.rmtree(dir_name)
+            print(f"  ✓ 删除目录: {dir_name}")
+            cleaned_items += 1
 
-    # 使用spec文件打包
-    cmd = f"pyinstaller --clean {spec_file}"
-    result = run_command(cmd, check=False)
+    for file_pattern in files_to_clean:
+        for path in Path(".").glob(file_pattern):
+            if path.is_file():
+                path.unlink()
+                print(f"  ✓ 删除文件: {path}")
+                cleaned_items += 1
 
-    if result.returncode == 0:
-        print("✓ 应用程序打包成功")
-        print("可执行文件位于: dist/SDF_Tool.exe")
+    if cleaned_items == 0:
+        print("  ✓ 无需清理，目录已干净")
 
-        # 清理临时文件
-        if Path(spec_file).exists():
-            Path(spec_file).unlink()
-
-        return True
-    else:
-        print("✗ 应用程序打包失败")
-        return False
-
-def create_pyinstaller_spec():
-    """创建PyInstaller spec文件内容"""
-    return '''# -*- mode: python ; coding: utf-8 -*-
+def create_spec_file():
+    """创建PyInstaller spec文件"""
+    spec_content = '''# -*- mode: python ; coding: utf-8 -*-
 
 block_cipher = None
 
@@ -161,12 +170,10 @@ a = Analysis(
     ['main.py'],
     pathex=[],
     binaries=[],
-    datas=[
-        ('src', 'src'),
-    ],
+    datas=[],
     hiddenimports=[
         'PySide6.QtCore',
-        'PySide6.QtGui',
+        'PySide6.QtGui', 
         'PySide6.QtWidgets',
         'PIL',
         'PIL.Image',
@@ -188,6 +195,29 @@ a = Analysis(
         'matplotlib',
         'PyQt5',
         'PyQt6',
+        'test_*',
+        'tests',
+        'sphinx',
+        'sphinx.ext.napoleon',
+        'pygments.lexers.c_cpp',
+        'docutils',
+        'jinja2',
+        'babel',
+        'IPython',
+        'jupyter',
+        'notebook',
+        'pandas',
+        'sympy',
+        'setuptools',
+        'distutils',
+        'pkg_resources',
+        'email',
+        'xml',
+        'urllib3',
+        'requests',
+        'certifi',
+        'charset_normalizer',
+        'idna',
     ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
@@ -219,70 +249,99 @@ exe = EXE(
     entitlements_file=None,
 )
 '''
+    
+    with open("SDF_Tool.spec", 'w', encoding='utf-8') as f:
+        f.write(spec_content)
 
-def clean_build():
-    """清理构建文件"""
-    print("清理构建文件...")
-    
-    dirs_to_clean = ["build", "dist", "__pycache__", "*.egg-info"]
-    files_to_clean = []
-    
-    for dir_pattern in dirs_to_clean:
-        for path in Path(".").glob(f"**/{dir_pattern}"):
-            if path.is_dir():
-                shutil.rmtree(path)
-                print(f"删除目录: {path}")
-    
-    for file_pattern in files_to_clean:
-        for path in Path(".").glob(file_pattern):
-            if path.is_file():
-                path.unlink()
-                print(f"删除文件: {path}")
-    
-    print("✓ 清理完成")
+    print("📝 创建PyInstaller配置文件: SDF_Tool.spec")
+
+def package(log_file=None):
+    """执行打包"""
+    print("🔨 开始打包...")
+    print("📋 这可能需要几分钟时间，请耐心等待...")
+    print("📊 PyInstaller正在分析依赖关系...")
+    print("💡 注意: 如果看到strip相关的警告，这是正常的，不影响打包结果")
+    if log_file:
+        print(f"📄 详细日志将保存到: {log_file}")
+    print()
+
+    # 使用spec文件打包，保存详细日志
+    cmd = "pyinstaller --clean --noconfirm --log-level=INFO SDF_Tool.spec"
+
+    print("🚀 执行打包命令...")
+    if run_command(cmd, show_output=True, log_file=log_file):
+        print("\n✅ 打包成功!")
+        print("📁 可执行文件位于: dist/SDF_Tool.exe")
+
+        # 显示文件大小
+        exe_path = Path("dist/SDF_Tool.exe")
+        if exe_path.exists():
+            size_mb = exe_path.stat().st_size / (1024 * 1024)
+            print(f"📏 文件大小: {size_mb:.1f} MB")
+
+        return True
+    else:
+        print("\n❌ 打包失败")
+        return False
 
 def main():
-    parser = argparse.ArgumentParser(description="SDF工具构建脚本")
-    parser.add_argument("--clean", action="store_true", help="清理构建文件")
-    parser.add_argument("--deps", action="store_true", help="安装Python依赖")
+    """主函数"""
+    print("🔧 SDF工具构建脚本")
+    print("=" * 40)
+    print("📦 准备打包SDF工具为可执行文件...")
+    print()
 
-    parser.add_argument("--test", action="store_true", help="运行测试")
-    parser.add_argument("--package", action="store_true", help="打包应用程序")
-    parser.add_argument("--all", action="store_true", help="执行完整构建流程")
-    parser.add_argument("--build-type", default="Release", choices=["Debug", "Release"], help="构建类型")
-    
-    args = parser.parse_args()
-    
-    if args.clean:
-        clean_build()
-        return
-    
-    if not any([args.deps, args.test, args.package, args.all]):
-        parser.print_help()
-        return
-    
-    # 检查依赖
-    if not check_dependencies():
-        print("依赖检查失败，请安装必要的工具")
-        sys.exit(1)
-    
-    success = True
-    
-    if args.all or args.deps:
-        success &= install_python_deps()
-        success &= install_build_deps()
+    # 创建构建日志
+    log_file = create_build_log()
 
-    if args.all or args.test:
-        success &= run_tests()
+    try:
+        # 检查当前目录
+        if not Path("main.py").exists():
+            print("❌ 错误: 请在项目根目录运行此脚本")
+            return 1
 
-    if args.all or args.package:
-        success &= package_app()
-    
-    if success:
-        print("\n🎉 构建完成!")
-    else:
-        print("\n❌ 构建失败!")
-        sys.exit(1)
+        print("✅ 项目目录检查通过")
+
+        # 检查并安装PyInstaller
+        if not check_pyinstaller():
+            print("❌ PyInstaller安装失败")
+            return 1
+
+        # 清理之前的构建
+        clean_previous_build()
+
+        # 创建spec文件
+        create_spec_file()
+
+        # 执行打包
+        if package(log_file):
+            print("\n🎉 打包完成!")
+            print("📁 你可以在 dist/ 目录找到 SDF_Tool.exe")
+            print(f"📄 详细构建日志已保存: {log_file}")
+
+            # 询问是否打开文件夹
+            try:
+                response = input("\n💡 是否打开dist文件夹? (y/n): ").lower()
+                if response in ['y', 'yes', '是']:
+                    dist_path = Path("dist").absolute()
+                    os.startfile(str(dist_path))
+                    print("📂 已打开文件夹")
+            except KeyboardInterrupt:
+                print("\n👋 用户取消操作")
+            except Exception as e:
+                print(f"⚠️  打开文件夹失败: {e}")
+
+            return 0
+        else:
+            print("\n❌ 打包失败!")
+            print(f"📄 详细错误信息请查看日志: {log_file}")
+            print("💡 请检查日志文件中的错误信息，或尝试重新运行脚本")
+            return 1
+
+    except Exception as e:
+        print(f"\n❌ 构建过程中发生异常: {e}")
+        print(f"📄 详细信息请查看日志: {log_file}")
+        return 1
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
