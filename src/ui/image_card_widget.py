@@ -26,6 +26,10 @@ from .responsive_layout import ResponsiveCardContainer
 from .window_styles import LayoutConstants, ResponsiveLayout
 from .layout_config import layout_config_manager
 
+# 单个工程最多可导入的图像数量（UI 卡片与后端导入配额共用此常量）
+MAX_IMAGES = 8
+
+
 class ImageCardWidget(QFrame):
     """图像卡片组件 - 响应式版本"""
 
@@ -200,11 +204,12 @@ class ImageCardsContainer(QWidget):
 
     # 信号定义
     images_changed = Signal()  # 图像列表改变
+    image_removed = Signal(str)  # 图像被移除（供事件处理器同步后端状态）
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.image_cards = []  # 存储图像卡片
-        self.max_images = 8    # 最大图像数量
+        self.max_images = MAX_IMAGES    # 最大图像数量
 
         self._init_ui()
 
@@ -242,8 +247,14 @@ class ImageCardsContainer(QWidget):
         print(f"✅ 成功添加图像卡片: {image_path}")
         return True
     
-    def _remove_image(self, image_path: str):
-        """移除图像卡片"""
+    def _remove_image(self, image_path: str, notify: bool = True):
+        """移除图像卡片
+
+        Args:
+            image_path: 图像路径
+            notify: 是否发出 image_removed 信号。UI 同步（后端已先行删除）时传 False，
+                    避免回环触发。
+        """
         for i, card in enumerate(self.image_cards):
             if card.get_image_path() == image_path:
                 # 从布局中移除
@@ -254,6 +265,8 @@ class ImageCardsContainer(QWidget):
                 self.image_cards.pop(i)
 
                 self.images_changed.emit()
+                if notify:
+                    self.image_removed.emit(image_path)
                 print(f"✅ 移除图像卡片: {Path(image_path).name}")
                 break
     
@@ -261,14 +274,21 @@ class ImageCardsContainer(QWidget):
     
 
     
-    def clear(self):
+    def clear(self, notify: bool = True):
         """清空所有图像卡片"""
+        removed_paths = [card.get_image_path() for card in self.image_cards]
+
         for card in self.image_cards:
             self.layout.removeWidget(card)
             card.deleteLater()
 
         self.image_cards.clear()
         self.images_changed.emit()
+
+        if notify:
+            for path in removed_paths:
+                self.image_removed.emit(path)
+
         print("✅ 清空所有图像卡片")
     
     def get_images_data(self) -> list:

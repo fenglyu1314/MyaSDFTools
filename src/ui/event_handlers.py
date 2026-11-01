@@ -19,6 +19,7 @@ from PySide6.QtGui import QDragEnterEvent, QDropEvent
 from ..core.sdf_generator import SDFGenerator
 from ..core.image_manager import ImageManager
 from ..utils.image_utils import ImageUtils
+from .image_card_widget import MAX_IMAGES
 
 
 class SDFGenerationWorker(QThread):
@@ -220,6 +221,22 @@ class MainWindowEventHandler(QObject):
         self.ui_state_changed.emit()
         self.status_updated.emit("已清空所有图像")
 
+    def handle_image_removed(self, image_path: str):
+        """处理UI卡片删除事件 - 同步后端状态并释放导入配额
+
+        UI 上删除卡片后，必须把该图像从 current_images / image_manager 中移除，
+        否则「已导入总数」会只增不减，累积超过上限后就再也导不进新图。
+        """
+        if image_path not in self.current_images:
+            return
+
+        self.current_images.remove(image_path)
+        self.image_manager.remove_image(image_path)
+
+        print(f"🗑️ 后端同步移除图像: {Path(image_path).name}，当前剩余 {len(self.current_images)} 张")
+        self.ui_state_changed.emit()
+        self.status_updated.emit(f"已移除图像，当前 {len(self.current_images)} 张")
+
     def handle_angle_changed(self, angle: int):
         """处理角度改变事件"""
         # 这个方法将由主窗口实现具体的光照预览更新逻辑
@@ -231,30 +248,38 @@ class MainWindowEventHandler(QObject):
         pass
 
     def _add_images(self, file_paths: List[str]):
-        """添加图像文件"""
+        """添加图像文件（导入配额以当前有效图像数为准）"""
         added_count = 0
-        max_images = 8  # 最大8张图像
+        rejected_count = 0
 
         for file_path in file_paths:
-            if len(self.current_images) >= max_images:
-                QMessageBox.information(None, "提示", f"最多只能导入{max_images}张图像")
-                break
-
-            if file_path not in self.current_images:
-                try:
-                    # 验证图像文件
-                    if self.image_manager.add_image(file_path):
-                        self.current_images.append(file_path)
-                        added_count += 1
-                        print(f"✅ 后端成功添加图像: {Path(file_path).name}")
-                    else:
-                        print(f"❌ 后端添加图像失败: {Path(file_path).name}")
-                        QMessageBox.warning(None, "警告", f"无效的图像文件: {Path(file_path).name}")
-                except Exception as e:
-                    print(f"❌ 图像加载异常: {str(e)}")
-                    QMessageBox.warning(None, "错误", f"加载图像失败: {str(e)}")
-            else:
+            # 已存在的图像不占用配额
+            if file_path in self.current_images:
                 print(f"⚠️ 图像已存在，跳过: {Path(file_path).name}")
+                continue
+
+            if len(self.current_images) >= MAX_IMAGES:
+                rejected_count += 1
+                continue
+
+            try:
+                # 验证图像文件
+                if self.image_manager.add_image(file_path):
+                    self.current_images.append(file_path)
+                    added_count += 1
+                    print(f"✅ 后端成功添加图像: {Path(file_path).name}")
+                else:
+                    print(f"❌ 后端添加图像失败: {Path(file_path).name}")
+                    QMessageBox.warning(None, "警告", f"无效的图像文件: {Path(file_path).name}")
+            except Exception as e:
+                print(f"❌ 图像加载异常: {str(e)}")
+                QMessageBox.warning(None, "错误", f"加载图像失败: {str(e)}")
+
+        if rejected_count > 0:
+            QMessageBox.information(
+                None, "提示",
+                f"最多只能导入 {MAX_IMAGES} 张图像，本次有 {rejected_count} 张未导入"
+            )
 
         if added_count > 0:
             print(f"📊 总共添加了 {added_count} 张图像，当前总数: {len(self.current_images)}")
