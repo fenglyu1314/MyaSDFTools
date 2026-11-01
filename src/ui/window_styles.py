@@ -222,52 +222,6 @@ class LayoutConstants:
     MIN_PREVIEW_SIZE = BASE_UNIT * 25  # 200px
 
 
-class ResponsiveLayout:
-    """响应式布局计算器"""
-
-    @staticmethod
-    def calculate_card_size(container_width: int, max_cards: int = 8) -> tuple[int, int]:
-        """计算卡片尺寸"""
-        # 参考区域2的SDF卡片尺寸，保持一致性
-        # 区域1稍微增加高度以容纳删除按钮
-        card_width = 110   # 与区域2一致的宽度
-        card_height = 130  # 比区域2稍高，容纳删除按钮
-
-        return card_width, card_height
-
-    @staticmethod
-    def calculate_container_size(card_count: int, card_size: tuple[int, int]) -> tuple[int, int]:
-        """计算容器尺寸"""
-        card_width, card_height = card_size
-
-        # 计算容器宽度
-        margins = LayoutConstants.MARGIN_SMALL * 2
-        spacings = LayoutConstants.SPACING_SMALL * (card_count - 1) if card_count > 1 else 0
-        container_width = card_width * card_count + spacings + margins
-
-        # 计算容器高度（卡片高度 + 上下边距）
-        container_height = card_height + LayoutConstants.MARGIN_SMALL * 2
-
-        return container_width, container_height
-
-    @staticmethod
-    def calculate_preview_size(available_width: int, available_height: int) -> tuple[int, int]:
-        """计算预览区域尺寸"""
-        # 保持正方形比例，取较小值
-        size = min(available_width, available_height)
-        size = max(size, LayoutConstants.MIN_PREVIEW_SIZE)
-        return size, size
-
-    @staticmethod
-    def calculate_button_size(text: str, min_width: int | None = None) -> tuple[int, int]:
-        """计算按钮尺寸"""
-        # 基于文本长度计算宽度
-        text_width = len(text) * LayoutConstants.BASE_UNIT + LayoutConstants.MARGIN_MEDIUM * 2
-        width = max(text_width, min_width or LayoutConstants.BASE_UNIT * 20)  # 最小160px
-        height = LayoutConstants.MIN_BUTTON_HEIGHT + LayoutConstants.BASE_UNIT  # 40px
-        return width, height
-
-
 class WidgetStyles:
     """通用组件样式"""
 

@@ -61,6 +61,10 @@ class SignalConnectionManager:
         image_cards_container = self.components.get('image_cards_container')
         if image_cards_container and hasattr(image_cards_container, 'images_changed'):
             image_cards_container.images_changed.connect(self._handle_images_changed)
+
+        # 卡片被删除时同步后端（否则 current_images 只增不减，导入配额无法释放）
+        if image_cards_container and hasattr(image_cards_container, 'image_removed'):
+            image_cards_container.image_removed.connect(self.event_handler.handle_image_removed)
         
         # 参数组件信号
         parameter_widget = self.components.get('parameter_widget')
@@ -199,10 +203,10 @@ class SignalConnectionManager:
                 if not success:
                     print(f"❌ UI添加图像卡片失败: {image_path}")
 
-        # 移除不存在的图像
+        # 移除不存在的图像（后端已删除，只需清理卡片，不再回传信号）
         for existing_path in existing_paths:
             if existing_path not in current_images:
-                image_cards_container._remove_image(existing_path)
+                image_cards_container._remove_image(existing_path, notify=False)
                 print(f"🗑️ 移除图像卡片: {existing_path}")
 
         # 调试信息

@@ -167,9 +167,11 @@ class SDFCardsContainer(QWidget):
     def _init_ui(self):
         """初始化UI"""
         self.layout = QHBoxLayout(self)
-        self.layout.setContentsMargins(1, 5, 1, 5)  # 最小左右边距，让卡片均匀分布
+        self.layout.setContentsMargins(1, 5, 1, 5)  # 最小左右边距
         self.layout.setSpacing(4)  # 进一步减少间距
-        self.layout.setAlignment(Qt.AlignCenter | Qt.AlignTop)  # 居中对齐并顶部对齐
+        # 左对齐，与上方图像导入区保持同一套排列规则：
+        # 卡片顺序与图像顺序一一对应，便于对照检查与删除
+        self.layout.setAlignment(Qt.AlignLeft | Qt.AlignTop)
     
     def add_sdf_card(self, image_path: str) -> SDFCardWidget:
         """添加SDF卡片"""

@@ -11,20 +11,18 @@
 - 删除按钮
 """
 
-import os
 from pathlib import Path
-from typing import Optional
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QFrame, QSpinBox, QLineEdit, QSizePolicy
+    QFrame, QSizePolicy
 )
-from PySide6.QtCore import Qt, Signal, QSize
-from PySide6.QtGui import QPixmap, QFont
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QPixmap
 
-from .responsive_layout import ResponsiveCardContainer
-from .window_styles import LayoutConstants, ResponsiveLayout
-from .layout_config import layout_config_manager
+from ..core.image_manager import MAX_IMAGES
+from .window_styles import LayoutConstants
+
 
 class ImageCardWidget(QFrame):
     """图像卡片组件 - 响应式版本"""
@@ -200,22 +198,24 @@ class ImageCardsContainer(QWidget):
 
     # 信号定义
     images_changed = Signal()  # 图像列表改变
+    image_removed = Signal(str)  # 图像被移除（供事件处理器同步后端状态）
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.image_cards = []  # 存储图像卡片
-        self.max_images = 8    # 最大图像数量
+        self.max_images = MAX_IMAGES    # 最大图像数量
 
         self._init_ui()
 
     def _init_ui(self):
         """初始化UI"""
-        # 使用水平布局排列卡片，完全参考区域2的设置
+        # 卡片从左侧依次排列，空余空间留在右侧
         self.layout = QHBoxLayout(self)
         self.layout.setContentsMargins(1, 5, 1, 5)  # 与区域2完全一致的边距
         self.layout.setSpacing(4)  # 与区域2完全一致的间距
-
-        # 不设置特殊对齐，让卡片自然分布
+        # 左对齐：卡片按顺序贴左排布，删除某张后其余卡片位置可预期，
+        # 不会因整体居中而左右移动，便于连续快速删除
+        self.layout.setAlignment(Qt.AlignLeft | Qt.AlignTop)
     
     def add_image(self, image_path: str) -> bool:
         """添加图像卡片"""
@@ -242,8 +242,14 @@ class ImageCardsContainer(QWidget):
         print(f"✅ 成功添加图像卡片: {image_path}")
         return True
     
-    def _remove_image(self, image_path: str):
-        """移除图像卡片"""
+    def _remove_image(self, image_path: str, notify: bool = True):
+        """移除图像卡片
+
+        Args:
+            image_path: 图像路径
+            notify: 是否发出 image_removed 信号。UI 同步（后端已先行删除）时传 False，
+                    避免回环触发。
+        """
         for i, card in enumerate(self.image_cards):
             if card.get_image_path() == image_path:
                 # 从布局中移除
@@ -254,6 +260,8 @@ class ImageCardsContainer(QWidget):
                 self.image_cards.pop(i)
 
                 self.images_changed.emit()
+                if notify:
+                    self.image_removed.emit(image_path)
                 print(f"✅ 移除图像卡片: {Path(image_path).name}")
                 break
     
@@ -261,14 +269,21 @@ class ImageCardsContainer(QWidget):
     
 
     
-    def clear(self):
+    def clear(self, notify: bool = True):
         """清空所有图像卡片"""
+        removed_paths = [card.get_image_path() for card in self.image_cards]
+
         for card in self.image_cards:
             self.layout.removeWidget(card)
             card.deleteLater()
 
         self.image_cards.clear()
         self.images_changed.emit()
+
+        if notify:
+            for path in removed_paths:
+                self.image_removed.emit(path)
+
         print("✅ 清空所有图像卡片")
     
     def get_images_data(self) -> list:
