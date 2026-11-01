@@ -209,12 +209,13 @@ class ImageCardsContainer(QWidget):
 
     def _init_ui(self):
         """初始化UI"""
-        # 使用水平布局排列卡片，完全参考区域2的设置
+        # 卡片从左侧依次排列，空余空间留在右侧
         self.layout = QHBoxLayout(self)
         self.layout.setContentsMargins(1, 5, 1, 5)  # 与区域2完全一致的边距
         self.layout.setSpacing(4)  # 与区域2完全一致的间距
-
-        # 不设置特殊对齐，让卡片自然分布
+        # 左对齐：卡片按顺序贴左排布，删除某张后其余卡片位置可预期，
+        # 不会因整体居中而左右移动，便于连续快速删除
+        self.layout.setAlignment(Qt.AlignLeft | Qt.AlignTop)
     
     def add_image(self, image_path: str) -> bool:
         """添加图像卡片"""
