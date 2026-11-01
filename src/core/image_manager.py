@@ -4,14 +4,38 @@
 """
 图像管理器
 
-负责图像文件的管理，提供统一的图像管理接口
+负责图像文件的管理，提供统一的图像管理接口。
+
+图像集合的唯一数据源：UI 层不得自行维护图像列表副本，
+所有增删都通过本类完成，避免前后端状态漂移。
 """
 
-from typing import List, Dict, Optional, Tuple, Any
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Dict, Iterable, List, Optional, Tuple, Any
 import numpy as np
 from .image_info import ImageInfo
 from .image_validator import ImageValidator
 from .image_cache import ImageCache
+
+
+# 单个工程最多可导入的图像数量（多角度混合上限，UI 与后端共用此常量）
+MAX_IMAGES = 8
+
+
+@dataclass
+class ImageAddResult:
+    """批量导入结果
+
+    数量上限、重复、格式校验等规则统一在 ImageManager 内判定，
+    调用方只负责根据结果展示信息。
+    """
+
+    added: List[str] = field(default_factory=list)
+    duplicated: List[str] = field(default_factory=list)
+    over_limit: List[str] = field(default_factory=list)
+    invalid: List[str] = field(default_factory=list)
+
 
 class ImageManager:
     """图像管理器
@@ -19,14 +43,29 @@ class ImageManager:
     负责图像文件的统一管理，内部委托给专门的处理器。
     """
 
-    def __init__(self):
-        """初始化图像管理器"""
+    def __init__(self, max_images: int = MAX_IMAGES):
+        """初始化图像管理器
+
+        Args:
+            max_images: 允许的最大图像数量
+        """
         self.images: Dict[str, ImageInfo] = {}
         self.cache = ImageCache()
         self.validator = ImageValidator()
+        self.max_images = max_images
+
+    @property
+    def count(self) -> int:
+        """当前图像数量"""
+        return len(self.images)
+
+    @property
+    def is_full(self) -> bool:
+        """是否已达数量上限"""
+        return len(self.images) >= self.max_images
 
     def add_image(self, file_path: str) -> bool:
-        """添加图像到管理器
+        """添加单张图像到管理器
 
         Args:
             file_path: 图像文件路径
@@ -34,25 +73,47 @@ class ImageManager:
         Returns:
             是否添加成功
         """
-        try:
-            # 验证图像文件
+        return bool(self.add_images([file_path]).added)
+
+    def add_images(self, file_paths: Iterable[str]) -> ImageAddResult:
+        """批量添加图像，统一执行去重、数量上限与格式校验
+
+        Args:
+            file_paths: 图像文件路径集合
+
+        Returns:
+            添加结果（新增 / 重复 / 超限 / 无效）
+        """
+        result = ImageAddResult()
+
+        for file_path in file_paths:
+            if file_path in self.images:
+                result.duplicated.append(file_path)
+                print(f"⚠️ 图像已存在，跳过: {Path(file_path).name}")
+                continue
+
+            if self.is_full:
+                result.over_limit.append(file_path)
+                continue
+
             is_valid, error_msg = self.validator.validate_image_file(file_path)
             if not is_valid:
+                result.invalid.append(file_path)
                 print(f"❌ {error_msg}")
-                return False
+                continue
 
-            # 创建图像信息
-            image_info = ImageInfo(file_path)
+            try:
+                image_info = ImageInfo(file_path)
+            except Exception as e:
+                result.invalid.append(file_path)
+                print(f"❌ 添加图像失败 {file_path}: {e}")
+                continue
 
-            # 添加到管理器
             self.images[file_path] = image_info
+            result.added.append(file_path)
             print(f"✅ 成功添加图像: {image_info.file_name}")
 
-            return True
-
-        except Exception as e:
-            print(f"❌ 添加图像失败 {file_path}: {e}")
-            return False
+        return result
 
     def remove_image(self, file_path: str) -> bool:
         """从管理器中移除图像

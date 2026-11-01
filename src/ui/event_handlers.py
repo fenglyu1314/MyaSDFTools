@@ -10,7 +10,7 @@
 import os
 import time
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Sequence, Tuple
 
 from PySide6.QtWidgets import QFileDialog, QMessageBox
 from PySide6.QtCore import QObject, Signal, QThread
@@ -18,8 +18,6 @@ from PySide6.QtGui import QDragEnterEvent, QDropEvent
 
 from ..core.sdf_generator import SDFGenerator
 from ..core.image_manager import ImageManager
-from ..utils.image_utils import ImageUtils
-from .image_card_widget import MAX_IMAGES
 
 
 class SDFGenerationWorker(QThread):
@@ -31,7 +29,7 @@ class SDFGenerationWorker(QThread):
     single_sdf_completed = Signal(str, object, float)  # image_path, sdf_result, computation_time
     merged_sdf_updated = Signal(object)  # merged_sdf_result
 
-    def __init__(self, sdf_generator: SDFGenerator, image_paths: List[str], parameters: dict):
+    def __init__(self, sdf_generator: SDFGenerator, image_paths: Sequence[str], parameters: dict):
         super().__init__()
         self.sdf_generator = sdf_generator
         self.image_paths = image_paths
@@ -128,11 +126,20 @@ class MainWindowEventHandler(QObject):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.sdf_generator = SDFGenerator()
+        # 图像集合的唯一数据源：ImageManager（不再额外维护 current_images 副本）
         self.image_manager = ImageManager()
-        self.current_images: List[str] = []
         self.sdf_result: Optional[object] = None
         self.computation_time: float = 0.0
         self.sdf_worker: Optional[SDFGenerationWorker] = None
+
+    @property
+    def current_images(self) -> Tuple[str, ...]:
+        """当前图像路径（只读，实时派生自 ImageManager）
+
+        返回元组而非列表：外部只能读取，任何试图 append/remove 的写法都会立即报错，
+        从结构上杜绝「UI 删了、后端列表还在」这类状态漂移。
+        """
+        return tuple(self.image_manager.get_image_paths())
 
     def handle_import_images(self):
         """处理导入图像事件"""
@@ -215,27 +222,23 @@ class MainWindowEventHandler(QObject):
 
     def handle_clear_images(self):
         """处理清空图像事件"""
-        self.current_images.clear()
         self.image_manager.clear_all()
         self.sdf_result = None
         self.ui_state_changed.emit()
         self.status_updated.emit("已清空所有图像")
 
     def handle_image_removed(self, image_path: str):
-        """处理UI卡片删除事件 - 同步后端状态并释放导入配额
+        """处理UI卡片删除事件 - 同步移除模型中的图像并释放导入配额
 
-        UI 上删除卡片后，必须把该图像从 current_images / image_manager 中移除，
-        否则「已导入总数」会只增不减，累积超过上限后就再也导不进新图。
+        删除是 UI 发出的「意图」，真正的状态变更统一落到 ImageManager，
+        再由 ui_state_changed 把视图重新对齐到模型。
         """
-        if image_path not in self.current_images:
+        if not self.image_manager.remove_image(image_path):
             return
 
-        self.current_images.remove(image_path)
-        self.image_manager.remove_image(image_path)
-
-        print(f"🗑️ 后端同步移除图像: {Path(image_path).name}，当前剩余 {len(self.current_images)} 张")
+        print(f"🗑️ 已移除图像: {Path(image_path).name}，当前剩余 {self.image_manager.count} 张")
         self.ui_state_changed.emit()
-        self.status_updated.emit(f"已移除图像，当前 {len(self.current_images)} 张")
+        self.status_updated.emit(f"已移除图像，当前 {self.image_manager.count} 张")
 
     def handle_angle_changed(self, angle: int):
         """处理角度改变事件"""
@@ -248,43 +251,28 @@ class MainWindowEventHandler(QObject):
         pass
 
     def _add_images(self, file_paths: List[str]):
-        """添加图像文件（导入配额以当前有效图像数为准）"""
-        added_count = 0
-        rejected_count = 0
+        """添加图像文件
 
-        for file_path in file_paths:
-            # 已存在的图像不占用配额
-            if file_path in self.current_images:
-                print(f"⚠️ 图像已存在，跳过: {Path(file_path).name}")
-                continue
+        去重、数量上限、格式校验全部交给 ImageManager 判定，
+        本方法只负责把结果反馈到状态栏和弹窗。
+        """
+        result = self.image_manager.add_images(file_paths)
 
-            if len(self.current_images) >= MAX_IMAGES:
-                rejected_count += 1
-                continue
+        if result.invalid:
+            names = "、".join(Path(p).name for p in result.invalid)
+            QMessageBox.warning(None, "警告", f"以下文件不是有效图像，已跳过：\n{names}")
 
-            try:
-                # 验证图像文件
-                if self.image_manager.add_image(file_path):
-                    self.current_images.append(file_path)
-                    added_count += 1
-                    print(f"✅ 后端成功添加图像: {Path(file_path).name}")
-                else:
-                    print(f"❌ 后端添加图像失败: {Path(file_path).name}")
-                    QMessageBox.warning(None, "警告", f"无效的图像文件: {Path(file_path).name}")
-            except Exception as e:
-                print(f"❌ 图像加载异常: {str(e)}")
-                QMessageBox.warning(None, "错误", f"加载图像失败: {str(e)}")
-
-        if rejected_count > 0:
+        if result.over_limit:
             QMessageBox.information(
                 None, "提示",
-                f"最多只能导入 {MAX_IMAGES} 张图像，本次有 {rejected_count} 张未导入"
+                f"最多只能导入 {self.image_manager.max_images} 张图像，"
+                f"本次有 {len(result.over_limit)} 张未导入"
             )
 
-        if added_count > 0:
-            print(f"📊 总共添加了 {added_count} 张图像，当前总数: {len(self.current_images)}")
+        if result.added:
+            print(f"📊 总共添加了 {len(result.added)} 张图像，当前总数: {self.image_manager.count}")
             self.ui_state_changed.emit()
-            self.status_updated.emit(f"已导入 {added_count} 张图像")
+            self.status_updated.emit(f"已导入 {len(result.added)} 张图像")
 
     def _on_sdf_generated(self, sdf_result, computation_time):
         """SDF生成完成回调"""
@@ -359,7 +347,7 @@ class MainWindowEventHandler(QObject):
     @property
     def has_images(self) -> bool:
         """是否有图像"""
-        return len(self.current_images) > 0
+        return self.image_manager.count > 0
 
     @property
     def has_sdf(self) -> bool:
@@ -369,4 +357,4 @@ class MainWindowEventHandler(QObject):
     @property
     def image_count(self) -> int:
         """图像数量"""
-        return len(self.current_images)
+        return self.image_manager.count

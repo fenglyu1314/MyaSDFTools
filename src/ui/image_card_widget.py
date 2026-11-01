@@ -11,23 +11,17 @@
 - 删除按钮
 """
 
-import os
 from pathlib import Path
-from typing import Optional
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QFrame, QSpinBox, QLineEdit, QSizePolicy
+    QFrame, QSizePolicy
 )
-from PySide6.QtCore import Qt, Signal, QSize
-from PySide6.QtGui import QPixmap, QFont
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QPixmap
 
-from .responsive_layout import ResponsiveCardContainer
-from .window_styles import LayoutConstants, ResponsiveLayout
-from .layout_config import layout_config_manager
-
-# 单个工程最多可导入的图像数量（UI 卡片与后端导入配额共用此常量）
-MAX_IMAGES = 8
+from ..core.image_manager import MAX_IMAGES
+from .window_styles import LayoutConstants
 
 
 class ImageCardWidget(QFrame):
