@@ -9,7 +9,7 @@ UI布局管理器 - 重构后的简化版本
 
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout
 
-from .ui_component_factory import UIComponentFactory
+from .ui_components import UIComponentFactory
 from .ui_signal_manager import SignalConnectionManager
 from .window_configuration import WindowConfiguration
 

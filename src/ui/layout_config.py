@@ -9,7 +9,7 @@
 
 from dataclasses import dataclass
 from typing import Dict, Tuple, Optional
-from .window_styles import LayoutConstants, ResponsiveLayout
+from .window_styles import LayoutConstants
 
 
 @dataclass
@@ -208,27 +208,6 @@ class LayoutConfigManager:
                 height = int(width / area_config.aspect_ratio)
         
         return width, height
-    
-    def calculate_card_layout(self, area_name: str, container_width: int) -> Dict:
-        """计算卡片布局"""
-        config_dict = self.get_config(area_name)
-        card_config = config_dict.get("card_config", {})
-        
-        max_cards = card_config.get("max_cards", 8)
-        card_spacing = card_config.get("card_spacing", LayoutConstants.SPACING_SMALL)
-        
-        # 计算卡片尺寸
-        card_width, card_height = ResponsiveLayout.calculate_card_size(container_width, max_cards)
-        
-        # 计算容器尺寸
-        container_width, container_height = ResponsiveLayout.calculate_container_size(max_cards, (card_width, card_height))
-        
-        return {
-            "card_size": (card_width, card_height),
-            "container_size": (container_width, container_height),
-            "max_cards": max_cards,
-            "spacing": card_spacing
-        }
     
     def update_config(self, area_name: str, config_updates: Dict):
         """更新配置"""

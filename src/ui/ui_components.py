@@ -9,17 +9,16 @@ UI组件创建器
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QLabel,
-    QPushButton, QProgressBar, QSlider, QFrame
+    QPushButton, QProgressBar, QSlider, QStatusBar
 )
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QFont
 
 from .window_styles import ButtonStyles, WidgetStyles, LayoutConstants
 from .image_card_widget import ImageCardsContainer
 from .sdf_card_widget import SDFCardsContainer
 from .parameter_widget import ParameterWidget
 from .zoomable_image_widget import ZoomableImageWidget
-from .responsive_layout import ResponsiveGroupBox, ResponsivePreviewWidget
+from .responsive_layout import ResponsiveGroupBox
 from .layout_config import layout_config_manager
 
 
@@ -198,6 +197,55 @@ class UIComponentFactory:
 
         area.setFixedSize(451, 350)
         return area, lighting_preview, angle_slider, angle_value_label
+
+    @staticmethod
+    def create_menu_bar(main_window):
+        """创建菜单栏"""
+        menubar = main_window.menuBar()
+
+        # 文件菜单
+        file_menu = menubar.addMenu("文件(&F)")
+        import_action, export_action, exit_action = MenuFactory.create_file_menu_actions()
+        file_menu.addAction(import_action)
+        file_menu.addSeparator()
+        file_menu.addAction(export_action)
+        file_menu.addSeparator()
+        file_menu.addAction(exit_action)
+
+        # 帮助菜单
+        help_menu = menubar.addMenu("帮助(&H)")
+        about_action = MenuFactory.create_help_menu_actions()
+        help_menu.addAction(about_action)
+
+        return {
+            'import_action': import_action,
+            'export_action': export_action,
+            'exit_action': exit_action,
+            'about_action': about_action
+        }
+
+    @staticmethod
+    def create_status_bar(main_window):
+        """创建状态栏"""
+        status_bar = QStatusBar()
+        main_window.setStatusBar(status_bar)
+
+        # 创建状态栏组件
+        status_label, image_count_label, time_label, zoom_label = StatusBarFactory.create_status_widgets()
+
+        # 添加到状态栏
+        status_bar.addWidget(status_label, 1)  # 拉伸
+        status_bar.addPermanentWidget(image_count_label)
+        status_bar.addPermanentWidget(time_label)
+        status_bar.addPermanentWidget(zoom_label)
+
+        return {
+            'status_bar': status_bar,
+            'status_label': status_label,
+            'image_count_label': image_count_label,
+            'time_label': time_label,
+            'status_zoom_label': zoom_label
+        }
 
 
 class StatusBarFactory:
